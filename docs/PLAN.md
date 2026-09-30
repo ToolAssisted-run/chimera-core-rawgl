@@ -54,6 +54,27 @@ sum of its four channels there, in its SDL build as here.
 Found on the way: the protection screen's joystick is slow (the cursor follows a press up to ten frames
 later), so a movie that fires too soon selects the wrong symbol - the game's, not the core's.
 
+## The real Amiga release (2026-09-30)
+
+Another World, Amiga, English (archive.org "anotherworldamiga": two 880 KB OFS disks, "Disk1" with bank01, 02,
+06, 09, 0B, 0C, 0D and the program, "Disk2" with bank03, 04, 06, 07, 08, 09, 0A, 0C; no bank05 - rawgl's dumper
+skips bank 5 on the Amiga and Atari ST, and nothing asks for it). The project's zip is the two disks' files in
+one folder. Its banks:
+
+    bank01 57CE8D896B0540C85B8A6E2845A1C2266AE1D296    bank08 A2CE8BBB90CF9EEA9D5C1CB98F58E3D818F3220A
+    bank02 202E2E23252493D2305A7C695D04E6C627BDB1CD    bank09 4450576256ECC94FFD5E9B86597FAD6E56C670D3
+    bank03 030EBE543A472E3C5398C3230CAED15DD1DB936B    bank0A 63A509ABC1A616C5C5A76A1D2E79F18581E88E04
+    bank04 4CE656819E67653B8B543C7A0CC13E8B7427E217    bank0B 9066A5BC9F62240FD6393D9024BA3F45A5914ADA
+    bank06 93A704C78DBE6FEACCC99E618D3F1CB7AE6C0D8F    bank0C 93309C022BE0F74064BF31618F8433B1C4D093DC
+    bank07 B1032105D29CE5A7D504FFC845BECE4ADD203BAB    bank0D D42EB7DF5C912D322B24BFB23660AF36972668B6
+
+What ran (run-gate.sh -g -M, a local movie): the copy protection (the same screen as DOS - the first 400 steps
+are the DOS run's to the pixel and the sample - answered twice), the credits, the whole intro (148 s: the
+Amiga's music runs a little shorter than the DOS port's; the same sync points), the first level to the leech.
+3,767 steps: native == sandbox, rerecord, session; and through chimera-run. The picker's cursor follows a
+press up to 25 frames late here (10 on DOS): the local solver now waits for the game to act instead of counting
+frames.
+
 ## The other releases (2026-09-30)
 
 Sergio: support every release rawgl plays, the real files to come later. Done, each proven on the synthetic game

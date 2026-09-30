@@ -76,7 +76,8 @@ the CM-32L is Munt's.
 
 ## What has been run
 
-**The DOS release has run on real data** (below). The other releases' real data has not been at hand yet. Every
+**The DOS and Amiga (English) releases have run on real data** (below). The other releases' real data has not
+been at hand yet. Every
 release has also run as the core's **synthetic game** - its own bytecode, pictures, sounds and music written in that release's
 format (`waterbox/tests/make-synthetic.py`) - through the whole path its files take: native == sandbox,
 rerecord, session. That proves the core's side (the files, the step, the clock, the sound decoders, the
@@ -94,11 +95,19 @@ close-up, then its "press button" screen with the level's access code). Over tho
 native == sandbox, a savestate before every step, a new host on the first level; with the mt32 setting and real
 CM-32L ROMs, native == sandbox and only the sound changing, where the intro's effects play.
 
+**Another World (Amiga, English: two OFS floppies, archive.org's "anotherworldamiga")**: a project brings the
+two disks' files merged into one folder, as the disks' own readme installs them (bank06, 09 and 0C are on both,
+the same; the Amiga has no bank05). rawgl recognises it by BANK01's size (244,868 bytes) and finds its
+resources by its own table. The same path as DOS - the protection (whose picker is slower here: its cursor
+takes up to 25 frames to follow a press), the credits, the 148-second intro (the Amiga's music runs a little
+shorter than the DOS port's), the first level to the leech - 3,767 steps: native == sandbox, rerecord, session.
+
 | Release | Synthetic game | Real files |
 |---|---|---|
 | DOS | yes, and its effects on a CM-32L (with real CM-32L ROMs) | **yes**: Out of This World (US), the copy protection answered, its credits, the whole intro, the first level; native == sandbox, rerecord, session; and with the CM-32L |
 | DOS demo | (the DOS path, less the password screen) | needs files |
-| Amiga French / English | no (rawgl finds its resources by a built-in table keyed on BANK01's size) | needs files |
+| Amiga English | no (rawgl finds its resources by a built-in table keyed on BANK01's size) | **yes**: the two disks' files, the copy protection answered, the whole intro, the first level; native == sandbox, rerecord, session |
+| Amiga French | no (the same) | needs files |
 | Atari ST | no (the same) | needs files |
 | Atari ST demo | no (the same, AW.TOS) | needs files |
 | 15th Anniversary Edition | yes: Pak01.pak, WAV sounds and music, original and remastered | needs files |
