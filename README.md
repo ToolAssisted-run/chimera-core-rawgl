@@ -77,7 +77,7 @@ the CM-32L is Munt's.
 
 ## What has been run
 
-**The DOS, Amiga (English) and 3DO releases have run on real data** (below). The other releases' real data
+**The DOS, Amiga (English), Atari ST and 3DO releases have run on real data** (below). The other releases' real data
 has not been at hand yet. Every
 release has also run as the core's **synthetic game** - its own bytecode, pictures, sounds and music written in that release's
 format (`waterbox/tests/make-synthetic.py`) - through the whole path its files take: native == sandbox,
@@ -103,6 +103,13 @@ resources by its own table. The same path as DOS - the protection (whose picker 
 takes up to 25 frames to follow a press), the credits, the 148-second intro (the Amiga's music runs a little
 shorter than the DOS port's), the first level to the leech - 3,767 steps: native == sandbox, rerecord, session.
 
+**Another World (Atari ST: TOSEC's two Pasti disk images, tagged FR)**: the disks' ordinary sectors hold a
+FAT12 file system with the banks (the protection lives on the tracks past it); merged into one folder as on the
+Amiga, rawgl knows the release by BANK01's size (227,142 bytes, the one Atari ST size it has; its texts are
+rawgl's own, per the language setting). The same run as the Amiga's - 3,767 steps, native == sandbox, rerecord,
+session - and the same machine to the picture and the step: the whole 4,600-step run's pictures and step
+lengths are the Amiga run's; only the sound is its own (the ST's samples).
+
 **Out of This World (3DO, USA: a CHD, MAME's compressed image - one MODE1_RAW track of 164,290 frames)**: the
 project brings the .chd as it is; libchdr reads it (LZMA, zlib and FLAC hunks), a hunk at a time, through
 callbacks that open, read and close the mounted file, so a savestate holds nothing of the host's. The Interplay
@@ -116,7 +123,7 @@ sandbox, rerecord, session; and chimera-run taking the .chd as its rom.
 | DOS demo | (the DOS path, less the password screen) | needs files |
 | Amiga English | no (rawgl finds its resources by a built-in table keyed on BANK01's size) | **yes**: the two disks' files, the copy protection answered, the whole intro, the first level; native == sandbox, rerecord, session |
 | Amiga French | no (the same) | needs files |
-| Atari ST | no (the same) | needs files |
+| Atari ST | no (the same) | **yes**: the two disks' files (TOSEC's Pasti images, "FR"), the copy protection answered, the whole intro, the first level; native == sandbox, rerecord, session |
 | Atari ST demo | no (the same, AW.TOS) | needs files |
 | 15th Anniversary Edition | yes: Pak01.pak, WAV sounds and music, original and remastered | needs files |
 | 20th Anniversary Edition | yes: game/, gzip'd sounds, Ogg music, difficulty, original and remastered | needs files |

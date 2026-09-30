@@ -75,6 +75,30 @@ Amiga's music runs a little shorter than the DOS port's; the same sync points), 
 press up to 25 frames late here (10 on DOS): the local solver now waits for the game to act instead of counting
 frames.
 
+## The real Atari ST release (2026-09-30)
+
+Another World, Atari ST, TOSEC 2011 "(FR)(Disk 1 of 2)[!][protected]" and "Disk 2": Pasti (.stx) images, whose
+ordinary 512-byte sectors (read with a local Pasti reader, from the format as Hatari reads it) make two
+complete 720 KB FAT12 disks; the copy protection is on tracks 80-81, past the file system. Disk 1: BANK01, 02,
+06, 09, 0B, 0D and the program; disk 2: BANK03, 04, 06, 07, 08, 09, 0A, 0C (06 and 09 the same on both; no
+05). BANK01 is 227,142 bytes, rawgl's Atari ST size (its only one - rawgl calls the table "EN"; these disks'
+banks are what it expects, whatever TOSEC's language tag). Banks:
+
+    BANK01 F18966A716E0CB37FEE8AA1574111C9870F25EC8    BANK08 D495CD00B3802453F881854778CA13036D97D133
+    BANK02 11F3A911E7DF3FEF1136CBBD6A814C146E19134A    BANK09 4450576256ECC94FFD5E9B86597FAD6E56C670D3
+    BANK03 030EBE543A472E3C5398C3230CAED15DD1DB936B    BANK0A 63A509ABC1A616C5C5A76A1D2E79F18581E88E04
+    BANK04 6A9E0913C2130F93BD606F1F8831024E460D3579    BANK0B 9C14D8ED539271D2801CA0C092B4000C0F2DD2D3
+    BANK06 93A704C78DBE6FEACCC99E618D3F1CB7AE6C0D8F    BANK0C 93309C022BE0F74064BF31618F8433B1C4D093DC
+    BANK07 E9C98F08A6C446D19E4466218E8249AD8252F7EE    BANK0D D42EB7DF5C912D322B24BFB23660AF36972668B6
+
+Ran: the protection (answered twice), the credits, the intro, the first level to the leech; 3,767 steps
+native == sandbox, rerecord, session; chimera-run. Against the Amiga's run with the same inputs: every picture
+and every step's length the same over 4,600 steps (so rawgl's Atari bitmap decoding gives what its Amiga one
+does, where this span shows bitmaps), the sound its own.
+
+A project brings the banks as a zip. The disks themselves (.st, .msa, .stx; the Amiga's .adf; the DOS
+floppy's .img) are not taken: that would be a slot of several disks and a reader for each format in the core.
+
 ## The real 3DO release (2026-09-30)
 
 Out of This World (USA), 3DO, as a CHD (v5, codecs cdlz/cdzl/cdfl, one MODE1_RAW track of 164,290 frames:
