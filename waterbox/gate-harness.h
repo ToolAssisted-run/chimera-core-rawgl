@@ -272,13 +272,13 @@ static int gate_run(const struct gate_core *c, const struct gate_opts *o)
 	}
 
 	/* the traced properties and the pokes, found once in the table */
-	struct gate_prop traced[32];
+	struct gate_prop traced[300];
 	int ntraced = 0;
 	if (o->traceProps)
 	{
-		char list[1024];
+		char list[8192];
 		snprintf(list, sizeof list, "%s", o->traceProps);
-		for (char *tok = strtok(list, ","); tok && ntraced < 32; tok = strtok(NULL, ","))
+		for (char *tok = strtok(list, ","); tok && ntraced < 300; tok = strtok(NULL, ","))
 			if (!gate_find_prop(c, tok, &traced[ntraced++]))
 			{
 				fprintf(stderr, "no such property: %s\n", tok);

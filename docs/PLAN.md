@@ -29,6 +29,31 @@ Started 2026-09-30, from the SDLPoP2 core's shape (the driver, the harnesses, th
 - **The gate**: 52 legs on the synthetic game in every release's format, including the package through
   chimera-run and (with `-r`) the CM-32L.
 
+## The real DOS release (2026-09-30)
+
+Out of This World, US DOS, a verified copy (GoodOldDays 000568: one 1.2 MB FAT12 disk; the game's files are on
+it as they are, no installer packing). Files, for firmware declarations later:
+
+    MEMLIST.BIN 362693989B77FE7CA42F354ABD7162BFED0B8AB2
+    BANK01 F4A8186299A94F941BA6EFB567683F31360B6D3C    BANK08 0AE1B6EC1B8A456CD674F650D19E09EFE0CD2987
+    BANK02 67C51A2E26577E2032DFDDD02B8D3CB5B127B503    BANK09 1178804D88AF8C8017504C8E225C15991CB52140
+    BANK03 8308C482AFB15A0C71518DA30092989DC9F4A8E1    BANK0A A2CBFF889D49708EA44697ACBFB80BD922A8F21F
+    BANK04 4CE656819E67653B8B543C7A0CC13E8B7427E217    BANK0B 7A26B6EC3654597A223CB519690ED2A3A6E339B5
+    BANK05 DA19759AE2B5326F40A035768C461DBEDE7A9504    BANK0C FB0CEA1A7138B98CBD5177D355E7F39C958A0B95
+    BANK06 DB042F61FFFBB97DC3CA4DDB09DB6F2E61F7D942    BANK0D A4CDDF48A160450FEFFF73400F6B1784030727B4
+    BANK07 FEDA09078284B134B39F5800220072AFC67D1086
+
+What ran (run-gate.sh -g, with a local movie): the copy protection (answered twice, as it asks; entered with the
+joystick like an owner reading the wheel - the movie, and how it was made, stay out of the repo), the credits,
+the whole intro (152 s, its waits on VAR_MUSIC_SYNC met by the music player on the machine's time), the first
+level (out of the pool, the first screen, the leech's close-up death, the continue screen). 4,040 steps: native
+== sandbox, rerecord, session on the first level; the mt32 setting with real CM-32L ROMs, native == sandbox and
+only the sound changing. The intro's music reaches the 16-bit ceiling at its loudest: rawgl's mixer clips the
+sum of its four channels there, in its SDL build as here.
+
+Found on the way: the protection screen's joystick is slow (the cursor follows a press up to ten frames
+later), so a movie that fires too soon selects the wrong symbol - the game's, not the core's.
+
 ## The other releases (2026-09-30)
 
 Sergio: support every release rawgl plays, the real files to come later. Done, each proven on the synthetic game

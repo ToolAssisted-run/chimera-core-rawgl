@@ -36,9 +36,12 @@
 #                chimera-run plays a movie in Chimera's format (console
 #                buttons, then P1's), with and without rerecording
 #
-# usage: run-gate.sh [-m <miniBox dir>] [-g <Another World zip>] [-f <frames>] [-c <chimera-run>] [-r <ROM dir>]
-#   -g adds the equivalence, rerecord and session legs on the real game (the
-#      zip of the game's folder, as a project would bring it; not in the repo)
+# usage: run-gate.sh [-m <miniBox dir>] [-g <Another World zip or iso> [-M <movie>]] [-f <frames>]
+#                    [-c <chimera-run>] [-r <ROM dir>]
+#   -g adds the equivalence, rerecord and session legs on a real release (the
+#      zip of the game's folder, or the 3DO's disc, as a project would bring it;
+#      not in the repo): 2000 steps from power-on, or the steps of the movie -M
+#      names (a movie of your own, kept out of the repo)
 #   -c runs the engine leg with that chimera-run (build/dll/chimera-run of a
 #      Chimera checkout); it packages the core first
 #   -r runs the MT-32 legs with the CM-32L's ROMs from that folder
@@ -52,13 +55,15 @@ game=""
 frames=100
 chimera_run=""
 roms=""
-while getopts "m:g:f:c:r:" opt; do
+game_movie=""
+while getopts "m:g:f:c:r:M:" opt; do
 	case "$opt" in
 		m) mb="$OPTARG" ;;
 		g) game="$OPTARG" ;;
 		f) frames="$OPTARG" ;;
 		c) chimera_run="$OPTARG" ;;
 		r) roms="$OPTARG" ;;
+		M) game_movie="$OPTARG" ;;
 		*) exit 2 ;;
 	esac
 done
@@ -348,16 +353,26 @@ PY
 fi
 
 if [ -n "$game" ]; then
-	echo "== Another World ($game)"
+	echo "== Another World ($game${game_movie:+, $game_movie})"
 	mkdir -p "$work/game"
-	cp "$game" "$work/game/game.zip"
-	"$native" "$work/game" --frames 2000 > "$work/g.n"
-	"$wbx" "$core" "$work/game" --frames 2000 > "$work/g.w" 2>/dev/null
-	same game "$work/g.w" "$work/g.n" "native = sandbox, 2000 steps from power-on"
-	"$wbx" "$core" "$work/game" --frames 2000 --rerecord > "$work/g.r" 2>/dev/null
+	case "$game" in
+		*.iso|*.ISO) cp "$game" "$work/game/game.iso" ;;
+		*) cp "$game" "$work/game/game.zip" ;;
+	esac
+	gn=2000
+	gm=""
+	if [ -n "$game_movie" ]; then
+		gn=$(grep -vc '^#' "$game_movie")
+		gm="--movie $game_movie"
+	fi
+	gat=$((gn * 9 / 10))
+	"$native" "$work/game" --frames $gn $gm > "$work/g.n"
+	"$wbx" "$core" "$work/game" --frames $gn $gm > "$work/g.w" 2>/dev/null
+	same game "$work/g.w" "$work/g.n" "native = sandbox, $gn steps from power-on (clock $(value "$work/g.n" clock) ms)"
+	"$wbx" "$core" "$work/game" --frames $gn $gm --rerecord > "$work/g.r" 2>/dev/null
 	same game "$work/g.r" "$work/g.w" "rerecord = straight"
-	"$wbx" "$core" "$work/game" --frames 2000 --session-at 1234 > "$work/g.s" 2>/dev/null
-	same game "$work/g.s" "$work/g.w" "session at 1234 = straight"
+	"$wbx" "$core" "$work/game" --frames $gn $gm --session-at $gat > "$work/g.s" 2>/dev/null
+	same game "$work/g.s" "$work/g.w" "session at $gat = straight"
 fi
 
 echo

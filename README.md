@@ -76,18 +76,27 @@ the CM-32L is Munt's.
 
 ## What has been run
 
-**No release's real data has run in this core yet**: none is on the machines it was built on. Every release has
-run as the core's **synthetic game** - its own bytecode, pictures, sounds and music written in that release's
+**The DOS release has run on real data** (below). The other releases' real data has not been at hand yet. Every
+release has also run as the core's **synthetic game** - its own bytecode, pictures, sounds and music written in that release's
 format (`waterbox/tests/make-synthetic.py`) - through the whole path its files take: native == sandbox,
 rerecord, session. That proves the core's side (the files, the step, the clock, the sound decoders, the
 savestates) on each release's formats; it does not prove the releases' own content (their scripts, their
 compressed resources - the DOS banks' ByteKiller packing, Windows 3.1's LZ-Huffman, the 3DO's LZSS and coded
 cels as the real files use them, the 15th's TooDC encoding - their copy protections, their timing). `run-gate.sh
--g <zip or iso>` runs the equivalence, rerecord and session legs on a real release.
+-g <zip or iso> [-M <movie>]` runs the equivalence, rerecord and session legs on a real release.
+
+**Out of This World (US DOS, a verified copy: GoodOldDays 000568, one 1.2 MB disk)**: the copy protection's
+screen asks for code-wheel symbols as the original does, and takes the right ones (entered with the joystick as
+an owner reads them off the wheel; the test movie stays out of the repo); its credits, then the 152-second intro
+- whose script waits on the music, so its timing is the music player's by the machine's time - then the first
+level: Lester swims out of the pool onto the first screen, walks on, and a leech gets him (the game's own
+close-up, then its "press button" screen with the level's access code). Over those 4,040 steps (3 min 47 s):
+native == sandbox, a savestate before every step, a new host on the first level; with the mt32 setting and real
+CM-32L ROMs, native == sandbox and only the sound changing, where the intro's effects play.
 
 | Release | Synthetic game | Real files |
 |---|---|---|
-| DOS | yes, and its effects on a CM-32L (with real CM-32L ROMs) | needs files |
+| DOS | yes, and its effects on a CM-32L (with real CM-32L ROMs) | **yes**: Out of This World (US), the copy protection answered, its credits, the whole intro, the first level; native == sandbox, rerecord, session; and with the CM-32L |
 | DOS demo | (the DOS path, less the password screen) | needs files |
 | Amiga French / English | no (rawgl finds its resources by a built-in table keyed on BANK01's size) | needs files |
 | Atari ST | no (the same) | needs files |
