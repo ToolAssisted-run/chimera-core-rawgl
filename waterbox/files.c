@@ -1,10 +1,14 @@
 /* files.c - the game's data files, out of the project's file, and the settings.
  *
- * A project brings Another World as one file (the "game" slot,
- * file_slots.json): a .zip of the game's folder, or the 3DO release's disc -
- * its image (.iso) or MAME's compressed image of it (.chd) - as it is.
+ * A project brings Another World's own files (the "game" slot,
+ * file_slots.json): a .zip of the game's folder, its floppy disks' images, the
+ * 15th Anniversary Edition's files as they are (Pak01.pak, its music's .ogg,
+ * its texts' lang_*.Txt), or the 3DO release's disc - its image (.iso) or
+ * MAME's compressed image of it (.chd) - as it is. Never an installer: where a
+ * release ships its files inside one (the 15th's CD, GOG's 20th), the core
+ * asks for the files, saying which.
  *
- *   - A zip is unpacked once, at Init, into sealed memory - read-only after
+ *   - A zip (or a loose file) is unpacked once, at Init, into sealed memory - read-only after
  *     Init, and so never part of a savestate - and the engine's every open
  *     (rawgl's File, patches/0001) is answered from there by
  *     rawgl_memfs_find(). The zip may hold the game's folder at its top or
@@ -113,6 +117,7 @@ static int ends_with_ci(const char *s, const char *suffix)
  * folder is where the path starts. A disc image's is where it lies. */
 static const char *const k_markers[] = {
 	"memlist.bin", "bank01", "aw.tos", "data/pak01.pak", "game/dat/file017.dat", "bank", "gamedata/file340",
+	"pak01.pak",
 };
 
 /* the length of the folder part if `path` is one of the markers there, else -1 */
@@ -260,6 +265,36 @@ static int is_opera_image(const uint8_t *buf)
 	return buf[0] == 1 && !memcmp(buf + 40, "CD-ROM", 6);
 }
 
+/* sector 16 of a PC CD: ISO 9660's primary volume descriptor */
+static int is_iso9660_pvd(const uint8_t *sector)
+{
+	return sector[0] == 1 && !memcmp(sector + 1, "CD001", 5);
+}
+
+/* what the core asks for where a release comes inside an installer */
+#define ASK_15TH "the 15th Anniversary Edition's Pak01.pak, with Intro2004.ogg, End2004.ogg and lang_<language>.Txt for its music and texts"
+#define ASK_RAW "the game's own files from it instead: " ASK_15TH "; the 20th's game folder, zipped; Windows 3.1's BANK, WORLD.EXE, X.MID and Y.MID, zipped"
+#define ASK_PC_CD "the 15th Anniversary Edition's CD holds the game inside an installer, which the core does not open: add " ASK_15TH
+
+static int contains(const uint8_t *buf, size_t n, const char *what)
+{
+	const size_t k = strlen(what);
+	for (size_t i = 0; i + k <= n; i++)
+		if (buf[i] == (uint8_t)what[0] && !memcmp(buf + i, what, k)) return 1;
+	return 0;
+}
+
+/* an installer's start (its first 256 KiB): which, or NULL. NSIS's first
+ * header and Inno Setup's loader data both lie in there. */
+#define INSTALLER_PEEK (256u << 10)
+static const char *installer_kind(const uint8_t *buf, size_t n)
+{
+	if (n < 64 || buf[0] != 'M' || buf[1] != 'Z') return NULL;
+	if (contains(buf, n, "NullsoftInst")) return "an NSIS installer";
+	if (contains(buf, n, "Inno Setup Setup Data")) return "an Inno Setup installer";
+	return NULL;
+}
+
 /* ------------------------------------------------------------ the project's files
  *
  * The files the project brings - zips, disk images (disks.c), disk images in
@@ -271,7 +306,7 @@ static int is_opera_image(const uint8_t *buf)
 struct cand
 {
 	char path[256];
-	int zip;           /* the zip it is in, or -1: a disk's file, in data */
+	int zip;           /* the zip it is in; -1: a disk's file, in data; -2 - n: loose file n */
 	mz_uint entry;
 	uint8_t *data;
 	uint32_t size;
@@ -285,6 +320,9 @@ static struct
 	char name[256];
 } g_zips[MAX_ZIPS];
 static int g_nzips;
+#define MAX_LOOSE 8
+static char g_loose[MAX_LOOSE][256];
+static int g_nloose;
 static struct cand *g_cands;
 static int g_ncands, g_capcands;
 
@@ -408,6 +446,83 @@ static int add_disk(const char *name, long size, char *err, int errsize)
 	return ok;
 }
 
+/* the 15th Anniversary Edition's files as they come, out of their folders,
+ * where its folder has them: Data/Pak01.pak, its music (Music/Intro2004.ogg,
+ * End2004.ogg) and its texts (Menu/lang_English.Txt, ...); NULL when `name`
+ * is none of those */
+static const char *flat_place(const char *name, char *out, size_t cap)
+{
+	const char *base = base_name(name);
+	if (!strcasecmp(base, "pak01.pak")) snprintf(out, cap, "Data/Pak01.pak");
+	else if (ends_with_ci(base, ".ogg")) snprintf(out, cap, "Music/%.240s", base);
+	else if (!strncasecmp(base, "lang_", 5) && ends_with_ci(base, ".txt")) snprintf(out, cap, "Menu/%.240s", base);
+	else return NULL;
+	return out;
+}
+
+/* a loose file of those: Pak01.pak is also known by its "PACK", whatever its name */
+static const char *raw_place(const char *name, const uint8_t *head, long size, char *out, size_t cap)
+{
+	if (size >= 12 && !memcmp(head, "PACK", 4))
+	{
+		snprintf(out, cap, "Data/Pak01.pak");
+		return out;
+	}
+	return flat_place(name, out, cap);
+}
+
+static int has_cand(const char *root, const char *rel)
+{
+	char path[512];
+	snprintf(path, sizeof path, "%s%s", root, rel);
+	for (int i = 0; i < g_ncands; i++)
+		if (!strcasecmp(g_cands[i].path, path)) return 1;
+	return 0;
+}
+
+static int add_loose(const char *name, const char *place, long size, char *err, int errsize)
+{
+	if (g_nloose == MAX_LOOSE)
+	{
+		snprintf(err, (size_t)errsize, "too many loose files in the project (%d at most; zip them)", MAX_LOOSE);
+		return 0;
+	}
+	if ((unsigned long)size > 0xFFFFFFF0u)
+	{
+		snprintf(err, (size_t)errsize, "%s is too large (%ld bytes)", name, size);
+		return 0;
+	}
+	snprintf(g_loose[g_nloose], sizeof g_loose[0], "%.255s", name);
+	add_cand(place, -2 - g_nloose, 0, NULL, (uint32_t)size);
+	g_nloose++;
+	return 1;
+}
+
+/* the project holds no game: an installer where the files should be is said
+ * so, and the files it holds asked for */
+static int said_installer(char *err, int errsize)
+{
+	uint8_t *buf = malloc(INSTALLER_PEEK);
+	int said = 0;
+	for (int i = 0; buf && i < g_ncands && !said; i++)
+	{
+		const struct cand *c = &g_cands[i];
+		if (c->zip < 0 || !ends_with_ci(c->path, ".exe")) continue;
+		mz_zip_reader_extract_iter_state *it = mz_zip_reader_extract_iter_new(&g_zips[c->zip].za, c->entry, 0);
+		if (!it) continue;
+		const size_t n = mz_zip_reader_extract_iter_read(it, buf, INSTALLER_PEEK);
+		mz_zip_reader_extract_iter_free(it);
+		const char *kind = installer_kind(buf, n);
+		if (kind)
+		{
+			snprintf(err, (size_t)errsize, "%s in %s is %s, which the core does not open: add %s", c->path, g_zips[c->zip].name, kind, ASK_RAW);
+			said = 1;
+		}
+	}
+	free(buf);
+	return said;
+}
+
 static void release_sources(void)
 {
 	for (int z = 0; z < g_nzips; z++)
@@ -416,6 +531,7 @@ static void release_sources(void)
 		fclose(g_zips[z].f);
 	}
 	g_nzips = 0;
+	g_nloose = 0;
 	for (int i = 0; i < g_ncands; i++) free(g_cands[i].data);
 	free(g_cands);
 	g_cands = NULL;
@@ -443,10 +559,13 @@ static int settle(char *err, int errsize)
 	}
 	if (!found)
 	{
-		snprintf(err, (size_t)errsize, "the project's files hold no Another World data: the game's folder (a zip of it, or its disks' images) has MEMLIST.BIN and the BANK files (DOS), the BANK files (Amiga, Atari ST), Data/Pak01.pak (15th Anniversary), game/ (20th Anniversary), BANK and WORLD.EXE (Windows 3.1) or GameData/ (3DO)");
+		if (!said_installer(err, errsize))
+			snprintf(err, (size_t)errsize, "the project's files hold no Another World data. It takes the game's own files: the DOS release's disk images (or MEMLIST.BIN and the BANK files, zipped); the Amiga's or the Atari ST's disk images (or their BANK files, zipped); %s; the 20th's game folder, zipped; Windows 3.1's BANK, WORLD.EXE, X.MID and Y.MID, zipped; or the 3DO disc (.chd, .iso)", ASK_15TH);
 		return 0;
 	}
 	const size_t rootlen = strlen(root);
+	/* the 15th's files zipped without their folders */
+	const int flat15 = has_cand(root, "pak01.pak") && !has_cand(root, "data/pak01.pak");
 	g_files = calloc((size_t)g_ncands, sizeof *g_files);
 	for (int i = 0; i < g_ncands; i++)
 	{
@@ -457,7 +576,13 @@ static int settle(char *err, int errsize)
 		if (ok)
 		{
 			if (c->zip >= 0) ok = mz_zip_reader_extract_to_mem(&g_zips[c->zip].za, c->entry, data, c->size, 0);
-			else memcpy(data, c->data, c->size);
+			else if (c->zip == -1) memcpy(data, c->data, c->size);
+			else
+			{
+				FILE *f = fopen(g_loose[-2 - c->zip], "rb");
+				ok = f && fread(data, 1, c->size, f) == c->size;
+				if (f) fclose(f);
+			}
 		}
 		if (!ok)
 		{
@@ -465,7 +590,10 @@ static int settle(char *err, int errsize)
 			return 0;
 		}
 		struct gfile *g = &g_files[g_nfiles++];
-		snprintf(g->path, sizeof g->path, "%s", c->path + rootlen);
+		const char *rel = c->path + rootlen;
+		char place[256];
+		if (!(flat15 && !strchr(rel, '/') && flat_place(rel, place, sizeof place))) snprintf(place, sizeof place, "%s", rel);
+		snprintf(g->path, sizeof g->path, "%s", place);
 		g->data = data;
 		g->size = c->size;
 		/* a disc image in a zip is the data path (rawgl opens it as one) */
@@ -487,7 +615,11 @@ static int open_disc(const char *name, const uint8_t *head, long size, char *err
 		uint8_t sector0[128];
 		if (chd_read_sectors(0, sector0, sizeof sector0) != sizeof sector0 || !is_opera_image(sector0))
 		{
-			snprintf(err, (size_t)errsize, "%s is a CD, but not a 3DO disc (its first sector is not an Opera file system's)", name);
+			uint8_t pvd[8];
+			if (chd_read_sectors(16 * 2048, pvd, sizeof pvd) == sizeof pvd && is_iso9660_pvd(pvd))
+				snprintf(err, (size_t)errsize, "%s is a PC CD, not the 3DO's disc: %s", name, ASK_PC_CD);
+			else
+				snprintf(err, (size_t)errsize, "%s is a CD, but not a 3DO disc (its first sector is not an Opera file system's)", name);
 			return 0;
 		}
 		g_has_host = 2;
@@ -526,7 +658,7 @@ int rawgl_files_load(char *err, int errsize)
 		}
 	if (!count)
 	{
-		snprintf(err, (size_t)errsize, "Another World needs the game's files: add a .zip of the game's folder, its disks' images, or the 3DO disc (.chd, .iso) to the project");
+		snprintf(err, (size_t)errsize, "Another World needs the game's own files: add its disks' images, a .zip of the game's folder, %s, or the 3DO disc (.chd, .iso) to the project", ASK_15TH);
 		return 0;
 	}
 
@@ -534,6 +666,7 @@ int rawgl_files_load(char *err, int errsize)
 	for (int i = 0; i < count && ok; i++)
 	{
 		uint8_t head[128];
+		char place[256];
 		const long size = peek(names[i], head, sizeof head);
 		snprintf(g_zip_name, sizeof g_zip_name, "%.255s", names[i]);
 		if (size < 0)
@@ -554,10 +687,24 @@ int rawgl_files_load(char *err, int errsize)
 		}
 		else if (size >= 4 && head[0] == 'P' && head[1] == 'K' && (head[2] == 3 || head[2] == 5))
 			ok = add_zip(names[i], size, err, errsize);
+		else if (raw_place(names[i], head, size, place, sizeof place))
+			ok = add_loose(names[i], place, size, err, errsize);
 		else if (!add_disk(names[i], size, err, errsize))
 		{
 			if (!err[0])
-				snprintf(err, (size_t)errsize, "%s is not a zip, a disk image the core reads (DOS or Atari ST FAT, .msa, .stx, the Amiga's .adf) or the 3DO's disc (.chd, .iso)", names[i]);
+			{
+				/* an installer, or a PC CD's image: the files they hold are asked for */
+				uint8_t *buf = malloc(INSTALLER_PEEK);
+				const long n = buf ? peek(names[i], buf, INSTALLER_PEEK) : -1;
+				const char *kind = n > 0 ? installer_kind(buf, (size_t)(n < (long)INSTALLER_PEEK ? n : (long)INSTALLER_PEEK)) : NULL;
+				if (kind)
+					snprintf(err, (size_t)errsize, "%s is %s, which the core does not open: add %s", names[i], kind, ASK_RAW);
+				else if (n >= 0x8000 + 8 && is_iso9660_pvd(buf + 0x8000))
+					snprintf(err, (size_t)errsize, "%s is a PC CD's image, not the 3DO's disc: %s", names[i], ASK_PC_CD);
+				else
+					snprintf(err, (size_t)errsize, "%s is not a zip, a disk image the core reads (DOS or Atari ST FAT, .msa, .stx, the Amiga's .adf), a file of the 15th Anniversary Edition's (Pak01.pak, .ogg, lang_*.Txt) or the 3DO's disc (.chd, .iso)", names[i]);
+				free(buf);
+			}
 			ok = 0;
 		}
 	}

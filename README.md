@@ -17,20 +17,28 @@ the CM-32L is Munt's.
 
 ## What it is
 
-- **Every release rawgl plays**, from the user's own files, **as they come** (the "game" slot):
+- **Every release rawgl plays**, from the user's own files, **as they come** (the "game" slot) - the game's own
+  files, never an installer:
   - **its floppy disks' images**, all of them - the DOS PC's (.img/.ima), the Amiga's (.adf, OFS or FFS), the
     Atari ST's (.st, .msa, .stx - Pasti's images, copy protection and all: the core takes only the files, and
     the protection is on tracks past the file system); also inside zips, as TOSEC keeps them. The core reads
     each disk's files (`waterbox/disks.c`) and merges them - a game on two disks is one folder to rawgl;
   - **the 3DO disc** - MAME's compressed image of it (.chd, read with libchdr: its first data track is what
     rawgl reads as the disc) or its image (.iso) - which comes alone;
-  - or **a .zip of the game's folder**, at its top or in a folder, names in any case: the anniversary editions'
-    and Windows 3.1's installed folders (the 15th's CD and GOG's 20th ship the game inside installers - NSIS,
-    Inno Setup - which the core does not open), or any release copied off its disks.
+  - **the 15th Anniversary Edition's files** as they come out of its installer - `Pak01.pak` (known by its
+    contents, whatever its name), and `Intro2004.ogg`, `End2004.ogg` and `lang_<language>.Txt` for its music
+    and texts - loose, or zipped with or without their folders;
+  - or **a .zip of the game's folder**, at its top or in a folder, names in any case, for the files that have no
+    extension or keep folders: the 20th Anniversary Edition's `game/` folder, Windows 3.1's BANK, WORLD.EXE,
+    X.MID and Y.MID, or any release copied off its disks.
+
+  The 15th's CD and GOG's 20th ship the game inside installers (NSIS, Inno Setup), which the core does not
+  open: an installer, loose or in a zip, and the 15th's PC CD (.iso, .chd) are refused, the refusal naming the
+  files to take out of them instead.
 
   The core unpacks the files into sealed memory at start (no savestate carries them) and reads a disc where it
   lies, a block at a time, holding nothing of the host's between two reads. The package
-  carries none of the game's data. A project without the file, a file that is not a zip or a disc, a zip with no
+  carries none of the game's data. A project without the files, a file that is none of the above, a zip with no
   game in it, and data rawgl cannot tell are refused, saying why.
 
   | Release | The folder is recognised by | Starts at | Sound | Picture |
@@ -126,8 +134,9 @@ session - and the same machine to the picture and the step: the whole 4,600-step
 lengths are the Amiga run's; only the sound is its own (the ST's samples).
 
 **Another World, 15th Anniversary Edition (Europe, En/Fr/Es: a Redump CD image)**: the CD holds the game
-inside an NSIS installer (`AnotherWorld_full.exe`: `Data/Pak01.pak` and the music), which a user installs, or
-opens with 7-Zip, and zips; the CD's `Menu/` (the language texts) may go in too, and the game runs without it.
+inside an NSIS installer (`AnotherWorld_full.exe`: `Data/Pak01.pak`, the music, `Menu/lang_*.Txt`), which a
+user installs, or opens with 7-Zip; the project brings the four files loose (or zipped) - the same machine as
+the whole installed folder zipped. The game runs without the texts.
 The original renderer; the intro (153 s) with its Ogg music (patch 0003), the first level to the leech and the
 edition's own continue screen - 3,097 steps: native == sandbox, rerecord, session. The pack has no sound 52,
 which the game asks for three times in the intro: silent, as rawgl warns.

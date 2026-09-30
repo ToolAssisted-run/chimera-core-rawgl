@@ -20,6 +20,10 @@
 #                are - a DOS .img, two Amiga .adf, two Atari ST .st, .msa and
 #                .stx (a protected track and all), a zip of the two .adf -
 #                each the same machine as the zip, native = sandbox
+#   loose        the synthetic 15th Anniversary Edition's files as they come out
+#                of its installer, loose (its Pak01.pak under another name, the
+#                intro's music an Ogg, its texts) = the same files zipped in
+#                their folders, native = sandbox, session
 #   settings     randomSeed is what the script's seed starts at, language what
 #                the DOS copy protection's title choice reads, difficulty and
 #                remasteredAudio what the anniversary editions read (both
@@ -31,7 +35,9 @@
 #                one, a refusal that names it
 #   refusals     no zip, not a zip, no game in it, data rawgl cannot tell, a
 #                15th Anniversary Edition's Pak01.pak that is not one, a seed
-#                out of range: each says why
+#                out of range, an installer (NSIS, loose; Inno Setup, in a
+#                zip), a PC CD (.iso, .chd): each says why - the installers
+#                and the PC CD naming the files to add instead
 #   halts        rawgl's error() and a failed assertion halt the machine, which
 #                keeps stepping; the same in both builds
 #   clock        the guest has no time() of its own: the one it calls is the
@@ -196,6 +202,23 @@ done
 digest_run wbx "$work/disks-adf" "$frames" "$movie" --session-at "$at" > "$work/disks-adf/s"
 same "disks (adf)" "$work/disks-adf/s" "$work/disks-adf/w" "session at step $at = straight"
 
+echo "== loose"
+ld="$work/loose"
+python3 "$here/tests/make-synthetic.py" --release 15th --container loose "$ld"
+m="$here/tests/synthetic-nth.movie"
+digest_run native "$ld" 90 "$m" > "$ld/n"
+digest_run native "$ld/zipped" 90 "$m" > "$ld/z"
+digest_run wbx "$ld" 90 "$m" > "$ld/w"
+digest_run wbx "$ld" 90 "$m" --session-at 54 > "$ld/s"
+same "loose (15th)" "$ld/n" "$ld/z" "$(ls "$ld" | grep -v -e '^slots$' -e '^zipped$' -e '^[nwzs]\(\.d\)\?$' | tr '\n' ' ')as they are = zipped in their folders"
+same "loose (15th)" "$ld/w" "$ld/n" "native = sandbox"
+same "loose (15th)" "$ld/s" "$ld/w" "session at step 54 = straight"
+if [ "$(value "$ld/n" audioHash)" != "$(value "$work/rel-15th/n" audioHash)" ] && [ "$(value "$ld/n" videoHash)" = "$(value "$work/rel-15th/n" videoHash)" ]; then
+	pass "loose (15th): the intro's music is the Ogg (patch 0003), the pictures the WAV release's"
+else
+	fail "loose (15th): the Ogg music did not play, or more than the sound changed"
+fi
+
 echo "== settings"
 mkgame seed
 printf '{"randomSeed": 200, "language": "fr"}' > "$work/seed/settings"
@@ -301,8 +324,9 @@ refuse() { # refuse <dir> <expected text> <what>
 		fail "refusals: $3 - $(echo "$out" | sed -n 's/^loadError=//p')"
 	fi
 }
-mkdir -p "$work/empty" "$work/notzip" "$work/nodata" "$work/unknown" "$work/badpak" "$work/badseed"
-refuse empty "needs the game's files" "no zip"
+mkdir -p "$work/empty" "$work/notzip" "$work/nodata" "$work/unknown" "$work/badpak" "$work/badseed" \
+	"$work/nsis" "$work/inno" "$work/pciso" "$work/pcchd"
+refuse empty "needs the game's own files" "no files"
 echo "not a zip" > "$work/notzip/game.zip"
 refuse notzip "is not a zip, a disk image" "not a zip, a disk image or a disc"
 python3 - "$work" <<'PY'
@@ -314,10 +338,32 @@ with zipfile.ZipFile(w + "/unknown/game.zip", "w") as z:
     z.writestr("aw/BANK01", b"\0" * 1000)        # no release rawgl knows is 1000 bytes
 with zipfile.ZipFile(w + "/badpak/game.zip", "w") as z:
     z.writestr("AW15/Data/Pak01.pak", b"\0" * 16)   # not a PACK
+# installers: an executable's start with NSIS's first header, or Inno Setup's
+# loader data, somewhere in its first 256 KiB
+nsis = bytearray(b"MZ" + b"\0" * 70000); nsis[0xDE00:0xDE00 + 12] = b"NullsoftInst"
+open(w + "/nsis/AnotherWorld_full.exe", "wb").write(nsis)
+open(w + "/nsis/slots", "w").write('{"game": ["AnotherWorld_full.exe"]}')
+inno = bytearray(b"MZ" + b"\0" * 90000); inno[0x11800:0x11815] = b"Inno Setup Setup Data"
+with zipfile.ZipFile(w + "/inno/game.zip", "w") as z:
+    z.writestr("setup_another_world.exe", bytes(inno))
+# a PC CD: ISO 9660's volume descriptor at sector 16, no Opera file system
+iso = bytearray(2048 * 40); iso[16 * 2048:16 * 2048 + 6] = b"\x01CD001"
+open(w + "/pciso/game.iso", "wb").write(iso)
+PY
+python3 - "$here/tests/make-synthetic.py" "$work" <<'PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("ms", sys.argv[1])
+ms = importlib.util.module_from_spec(spec); spec.loader.exec_module(ms)
+iso = bytearray(2048 * 40); iso[16 * 2048:16 * 2048 + 6] = b"\x01CD001"
+open(sys.argv[2] + "/pcchd/game.chd", "wb").write(ms.chd_of_image(bytes(iso)))
 PY
 refuse nodata "hold no Another World data" "no game in the zip"
 refuse unknown "No data files found" "a BANK01 of no known release (rawgl's own error, at Init)"
 refuse badpak "No data files found" "a 15th Anniversary Edition's Pak01.pak that is not one (rawgl's own error, at Init)"
+refuse nsis "is an NSIS installer, which the core does not open: add the game's own files" "an installer (NSIS), loose"
+refuse inno "is an Inno Setup installer, which the core does not open: add the game's own files" "an installer (Inno Setup) in a zip"
+refuse pciso "is a PC CD's image, not the 3DO's disc: .*add the 15th" "a PC CD's image (.iso)"
+refuse pcchd "is a PC CD, not the 3DO's disc: .*add the 15th" "a PC CD (.chd)"
 cp "$work/synth/game.zip" "$work/badseed/game.zip"
 printf '{"randomSeed": 70000}' > "$work/badseed/settings"
 refuse badseed "goes from 0 to 65535" "randomSeed 70000"

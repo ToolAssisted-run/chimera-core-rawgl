@@ -53,13 +53,20 @@ ST's, two disks each - and zip-adf (a zip holding the two .adf); the files are
 split across the two disks with one on both, and <out> is a folder, which gets
 the images and the slot map naming them.
 
+--container loose (with --release 15th) gives the 15th Anniversary Edition's
+files as they come out of its installer, without their folders - its
+Pak01.pak (named otherwise: the core knows it by its "PACK"), the intro's
+music as the European CD's Ogg (Intro2004.ogg; tests/tune.ogg), its texts'
+lang_English.Txt - and the slot map naming them, and zipped/game.zip, the same
+files in their folders.
+
 Two broken variants (DOS) test what a fault in the game's data does to the
 machine: --bad-opcode ends the intro on an opcode rawgl does not have (its
 error()), --bad-shape draws a polygon of more vertices than rawgl allows (its
 assertion). Either halts the machine; the gate checks it keeps stepping.
 
 usage: make-synthetic.py [--release dos|15th|20th|win31|3do|3do-iso|3do-chd]
-                         [--container img|adf|st|msa|stx|zip-adf] [--bad-opcode | --bad-shape] <out>
+                         [--container img|adf|st|msa|stx|zip-adf|loose] [--bad-opcode | --bad-shape] <out>
 """
 
 import gzip
@@ -838,9 +845,27 @@ def adf(files, label):
     return b"".join(bytes(b) for b in blocks)
 
 
+def loose_15th(files, out):
+    """the 15th's files as they come, out of their folders, in folder `out`"""
+    import json
+    os.makedirs(os.path.join(out, "zipped"), exist_ok=True)
+    tune = open(os.path.join(HERE, "tune.ogg"), "rb").read()
+    raw = {"AW15.PAK": files["Data/Pak01.pak"], "Intro2004.ogg": tune,
+           "lang_English.Txt": files["Menu/lang_English.Txt"]}
+    for n, d in raw.items(): open(os.path.join(out, n), "wb").write(d)
+    json.dump({"game": sorted(raw)}, open(os.path.join(out, "slots"), "w"))
+    with zipfile.ZipFile(os.path.join(out, "zipped", "game.zip"), "w", zipfile.ZIP_DEFLATED) as z:
+        for n, d in (("Data/Pak01.pak", raw["AW15.PAK"]), ("Music/Intro2004.ogg", tune),
+                     ("Menu/lang_English.Txt", raw["lang_English.Txt"])):
+            z.writestr(zipfile.ZipInfo("AW15/" + n, date_time=(2006, 1, 1, 0, 0, 0)), d)
+
+
 def containers(kind, files, out):
     """the DOS files on floppy images in folder `out`, and its slot map"""
     import json
+    if kind == "loose":
+        if RELEASE != "15th": sys.exit("--container loose is the 15th's")
+        return loose_15th(files, out)
     os.makedirs(out, exist_ok=True)
     names = sorted(files)
     half = len(names) // 2

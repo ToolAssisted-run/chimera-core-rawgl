@@ -1,5 +1,5 @@
 {
-  "_comment": "An Another World project brings the game as it comes: a .zip of the game's folder (the DOS release's MEMLIST.BIN and BANK files, the Amiga's or the Atari ST's BANK files, the 15th Anniversary Edition's folder with Data/Pak01.pak, the 20th's with game/, Windows 3.1's with BANK, the 3DO's with GameData/), at its top or in a folder, names in any case; its floppy disks' images, as many as it came on (a DOS disk's .img/.ima, the Amiga's .adf, the Atari ST's .st, .msa or .stx; also inside zips, as TOSEC keeps them), whose files the core reads and merges; or the 3DO disc as it is, its image (.iso) or MAME's compressed image of it (.chd), which comes alone. The core unpacks the files at start into memory no savestate carries, and reads a disc where it lies. Windows 3.1's MIDI music is played with a SoundFont, if the project brings one.",
+  "_comment": "An Another World project brings the game's own files, never an installer: its floppy disks' images, as many as it came on (a DOS disk's .img/.ima, the Amiga's .adf, the Atari ST's .st, .msa or .stx; also inside zips, as TOSEC keeps them), whose files the core reads and merges; the 3DO disc as it is, its image (.iso) or MAME's compressed image of it (.chd), which comes alone; the 15th Anniversary Edition's files as they come out of its installer - Pak01.pak, and Intro2004.ogg, End2004.ogg and lang_<language>.Txt for its music and texts - loose or zipped; or a .zip of the game's folder, for the releases whose files have no extension or keep folders: the DOS release's MEMLIST.BIN and BANK files, the Amiga's or the Atari ST's BANK files, the 20th Anniversary Edition's game/ folder (out of GOG's installer), Windows 3.1's BANK, WORLD.EXE, X.MID and Y.MID. An installer, or the 15th's PC CD, is refused, naming the files to add instead. The core unpacks the files at start into memory no savestate carries, and reads a disc where it lies. Windows 3.1's MIDI music is played with a General MIDI SoundFont, if the project brings one.",
   "slots": [
     {
       "id": "game",
@@ -15,9 +15,12 @@
         "img",
         "ima",
         "iso",
-        "chd"
+        "chd",
+        "pak",
+        "ogg",
+        "txt"
       ],
-      "help": "Another World as it comes: a .zip of the game's folder; or its floppy disks' images, all of them (DOS .img/.ima, Amiga .adf, Atari ST .st/.msa/.stx, or zips of them); or the 3DO disc (.chd or .iso) alone. Releases: DOS, Amiga, Atari ST, the 15th and 20th Anniversary Editions, Windows 3.1, 3DO."
+      "help": "Another World's own files, never an installer. DOS, Amiga, Atari ST: the floppy disks' images, all of them (.img/.ima, .adf, .st/.msa/.stx, or zips of them). 3DO: the disc (.chd or .iso), alone. 15th Anniversary Edition: Pak01.pak, with Intro2004.ogg, End2004.ogg and lang_<language>.Txt for its music and texts (out of its installer; loose or zipped). 20th Anniversary Edition: its game folder, zipped (out of GOG's installer). Windows 3.1: BANK, WORLD.EXE, X.MID and Y.MID, zipped."
     },
     {
       "id": "soundfont",

@@ -26,7 +26,7 @@ Started 2026-09-30, from the SDLPoP2 core's shape (the driver, the harnesses, th
 - **M6, savestates**: free - the engine's stack is guest memory (`coro.c`, MAP_STACK), the files are sealed.
   Rerecord (save and load before every step) and session (save while paused, new host, load) legs pass.
 - **M7, the package**: `waterbox.config`, keybinds, `file_slots.json`, licences; a deterministic package.
-- **The gate**: 69 legs on the synthetic game in every release's format and every container, including the
+- **The gate**: 77 legs on the synthetic game in every release's format and every container, including the
   package through chimera-run and (with `-r`) the CM-32L.
 
 ## The real DOS release (2026-09-30)
@@ -108,8 +108,12 @@ floppy's .img) are not taken: that would be a slot of several disks and a reader
   (the installer carries two versions of each at the same path; the later one is what installs). rawgl's
   15th reader wants the music as `Music/AW/Intro2004.wav` (another edition's layout): patch 0003 falls back to
   the .ogg. The pack has no `file052.wav` (the intro asks for it three times; rawgl warns and plays nothing).
-  The core does not open NSIS installers (7-Zip's reader is thousands of lines): the project brings the
-  installed folder, zipped.
+  The core does not open installers (Sergio, 2026-09-30: "do not accept installers, just ask for the relevant
+  (raw) files"): the project brings `Pak01.pak`, `Intro2004.ogg`, `End2004.ogg` and `lang_English.Txt` loose -
+  the same machine as the installed folder zipped (walk movie, 3,097 steps: native == sandbox, session) - or
+  zipped, in their folders or not. An installer (NSIS or Inno Setup: its first 256 KiB hold NSIS's first header
+  or Inno's loader data), loose or in a zip, and a PC CD (ISO 9660's descriptor at sector 16, as an .iso or a
+  .chd) are refused, naming the files to add instead.
 - **20th Anniversary Edition**, GOG 2.0 (setup_another_world_20th_anniversary_edition_2.0_(68029).exe, Inno
   Setup 5.6.2): the game in `game/`, but not as rawgl knew it - `game/BMP/*.bmp` plain (320x200 originals,
   `Font.bmp`, `Heads.bmp`) and `game/BMP/data1728x1080/e*.bmp` for the HD backgrounds, in place of gzip'd
