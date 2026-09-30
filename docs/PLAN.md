@@ -26,7 +26,7 @@ Started 2026-09-30, from the SDLPoP2 core's shape (the driver, the harnesses, th
 - **M6, savestates**: free - the engine's stack is guest memory (`coro.c`, MAP_STACK), the files are sealed.
   Rerecord (save and load before every step) and session (save while paused, new host, load) legs pass.
 - **M7, the package**: `waterbox.config`, keybinds, `file_slots.json`, licences; a deterministic package.
-- **The gate**: 79 legs on the synthetic game in every release's format and every container, including the
+- **The gate**: 80 legs on the synthetic game in every release's format and every container, including the
   package through chimera-run and (with `-r`) the CM-32L.
 
 ## The real DOS release (2026-09-30)
@@ -176,6 +176,15 @@ What ran (run-gate.sh -g -M, a local movie): the three logos (the 3DO's songs un
 screen. 3,907 steps: native == sandbox, rerecord, session; chimera-run with the .chd as its rom. The synthetic 3DO
 disc is also written as an (uncompressed) CHD, and the gate holds it to the same machine as the folder and the
 image.
+
+## The 3DO disc as an .iso (2026-09-30)
+
+Sergio's "Out of this World (USA).iso" (336,465,920 bytes, 2DEF26C5B687E52C5376129B1538E2B182B09100) is the
+.chd's data track as 2048-byte sectors, byte for byte. Read in place, it is the .chd's machine: the same
+3,907-step route, native == sandbox, rerecord, session. Found on the way: rawgl's Script leaves `_screenNum`
+unset until `restartAt`, which the 3DO reaches only after its logos and title, so `Game.Screen` showed
+whatever the heap held there - different between the builds (0 native, "ad" in the sandbox). The core now
+gives it restartAt's -1 when it creates the engine; the gate checks both builds read -1 during the logos.
 
 ## The demos, real (2026-09-30)
 

@@ -254,6 +254,11 @@ void game_main()
 	Script::_difficulty = (Difficulty)g.settings.difficulty;
 	Script::_useRemasteredAudio = g.settings.remastered_audio != 0;
 	g.engine = new Engine(rawgl_files_data_dir(), kPartIntro);
+	/* rawgl's Script leaves the screen number unset until restartAt, which the
+	 * 3DO reaches only after its logos and title: until then it was whatever
+	 * the heap held (Game.Screen differed between the builds). -1 is what
+	 * restartAt gives it. */
+	g.engine->_script._screenNum = -1;
 	const Resource::DataType type = g.engine->_res.getDataType();
 	g.release = type;
 	/* the renderer: rawgl's software one, as its "original" renderer for the

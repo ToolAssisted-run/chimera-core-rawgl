@@ -179,6 +179,15 @@ for rel in 15th 20th win31 3do 3do-iso 3do-chd; do
 done
 same "releases (3do)" "$work/rel-3do-iso/n" "$work/rel-3do/n" "the disc image, read in place = the GameData folder"
 same "releases (3do)" "$work/rel-3do-chd/n" "$work/rel-3do/n" "the disc as a CHD, read through libchdr = the GameData folder"
+# the screen number before the script's first restartAt (the 3DO's logos):
+# rawgl leaves it unset; the core gives it restartAt's -1, in both builds
+sn_n="$("$native" "$work/rel-3do" --frames 2 --trace "$work/sn.n" --trace-props Game.Screen > /dev/null 2>&1; last "$work/sn.n" 1)"
+sn_w="$("$wbx" "$core" "$work/rel-3do" --frames 2 --trace "$work/sn.w" --trace-props Game.Screen > /dev/null 2>&1; last "$work/sn.w" 1)"
+if [ "$sn_n" = -1 ] && [ "$sn_w" = -1 ]; then
+	pass "releases (3do): the screen number is -1 during the logos, in both builds"
+else
+	fail "releases (3do): the screen number during the logos is $sn_n native, $sn_w sandbox (want -1)"
+fi
 if [ "$(value "$work/rel-3do/n" activeButtons)" = 35 ] && [ "$(value "$work/rel-15th/n" activeButtons)" = 34 ]; then
 	pass "releases: Jump is the 3DO's only (35 buttons there, 34 elsewhere)"
 else
