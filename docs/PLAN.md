@@ -304,17 +304,14 @@ Found in rawgl, not changed:
 
 ## Left
 
-- **The real game, every release.** Nothing here has run Another World itself: no release's data is on this
-  machine or on jaffanator2 (Sergio will bring every release). `run-gate.sh -g <zip or iso>` adds the
-  equivalence, rerecord and session legs on one. What the synthetic game cannot prove: the releases' scripts
-  and copy protections, their compressed resources (DOS ByteKiller, Windows 3.1 LZ-Huffman, 3DO LZSS and coded
-  cels, the 15th's TooDC), the Amiga and Atari ST's built-in resource tables (keyed on BANK01's size), the
-  anniversary editions without their HD pictures, real step lengths and audio per step.
 - **Releases as machines**: once each has run, expose them to Chimera to choose (as SDLPoP2's versions), which
   also lets firmware be required per release.
 - **Firmware declarations** (see above), once the releases' files can be hashed.
-- **rawgl's licence**: ask its author for terms before the package is published anywhere.
+- **rawgl's licence**: rawgl states none. Sergio (2026-09-30) chose to publish anyway, as SyndicatFX does with
+  its disassembly: in good faith, taken down should the author object. Asking the author for terms remains
+  worth doing.
 - **Chimera's side**: the `AnotherWorld` system id and its mnemonics are Chimera's (SystemNames, MnemonicLookup),
   not this repository's.
-- **CI**: `.github/workflows/chimera.yml` builds and gates as the other cores do; it publishes only when the
-  repository is pushed, which it has not been.
+- **CI**: `.github/workflows/chimera.yml` builds and gates as the other cores do, and publishes what the gate
+  passed through Chimera's publish-core workflow: a rolling `dev` on every green push to main, a dated
+  `nightly-YYYY-MM-DD` from the scheduled run.

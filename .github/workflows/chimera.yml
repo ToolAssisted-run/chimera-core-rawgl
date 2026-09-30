@@ -10,9 +10,8 @@ name: chimera waterbox core
 # the package through Chimera's own contract tests. The legs on the real game
 # (run-gate.sh -g) run where the game's files are, before anything is pushed.
 #
-# No publish job: rawgl states no licence (README.md, Licence), so the package
-# is not released anywhere until its author has stated terms. The gate's
-# package is kept as a workflow artifact only.
+# rawgl states no licence (README.md, Licence): the package carries it in good
+# faith, and will be taken down should its author object.
 
 on:
   pull_request:
@@ -20,12 +19,20 @@ on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      kind:
+        description: 'dev (rolling) or nightly (dated). Blank means dev.'
+        required: false
+        default: ''
+        type: string
   schedule:
-    # 04:00 UTC: the gate against Chimera's main as it moves.
+    # 04:00 UTC. A nightly is published only when main moved since the last one;
+    # the reusable workflow checks, so an unchanged core costs one idle run.
     - cron: '0 4 * * *'
 
 # Keyed by the EVENT as well as the ref: the nightly schedule and a push to
-# main would otherwise cancel each other.
+# main would otherwise cancel each other, and the publish that depends on the
+# cancelled gate is then skipped with nothing reporting a failure.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
@@ -95,9 +102,9 @@ jobs:
         run: ./waterbox/run-gate.sh -c "$GITHUB_WORKSPACE/chimera-checkout/build/dll/chimera-run"
 
       - name: Build and install the package
-        # The commit is the core's authoritative version, so what this build
-        # stamps is what a movie can cite. A package built by hand stamps
-        # "+local" instead.
+        # The commit is the core's authoritative version: this build is the one
+        # that publishes the artifact, so what it stamps is what a movie can
+        # cite. A package built by hand stamps "+local" instead.
         env:
           CORE_VERSION: ${{ github.sha }}
           MINIBOX_DIR: ${{ github.workspace }}/chimera-checkout/extern/chimera-common-minibox
@@ -115,7 +122,7 @@ jobs:
             -c Release --nologo \
             --filter "FullyQualifiedName~InstalledCorePackagesTests|FullyQualifiedName~MnemonicUniquenessTests"
 
-      - name: Keep the package (a workflow artifact, not a release)
+      - name: Publish the core package
         uses: actions/upload-artifact@v7
         with:
           name: rawgl-${{ github.sha }}
@@ -128,3 +135,20 @@ jobs:
         with:
           name: gate-work
           path: build/gate/
+
+  publish:
+    # What the gate passed, published as this core's own release: a rolling
+    # `dev` on every green push to main, an immutable `nightly-YYYY-MM-DD` from
+    # the scheduled run. The logic is Chimera's tools/publish-core.sh, through
+    # the one reusable workflow every core publishes with.
+    name: publish
+    needs: [ gate ]
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: write
+    uses: ToolAssisted-run/chimera/.github/workflows/publish-core.yml@main
+    with:
+      core-id: rawgl
+      artifact: rawgl-${{ github.sha }}
+      package: rawgl.chimeraCore
+      kind: ${{ github.event.inputs.kind }}

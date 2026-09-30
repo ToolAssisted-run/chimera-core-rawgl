@@ -262,9 +262,9 @@ generator's MIDI tune rendered by TiMidity++ with FluidR3_GM (MIT).
 This repository is GPL-2.0-or-later. **rawgl states no licence**: its repository carries no licence file and its
 sources name Gregory Montoir's copyright without terms. Its predecessor, raw, is distributed by others under the
 GPL (Fabien Sanglard's Another-World-Bytecode-Interpreter is GPL-2.0), but rawgl itself grants nothing in
-writing; until its author states terms, a package of this core is for private use and not to be redistributed
-(`waterbox/package-licenses.json`). The integration is GPL-2.0-or-later so that it stays compatible with
-whichever GPL that turns out to be. miniz (`extern/miniz`) and TinySoundFont (`extern/TinySoundFont`) are MIT,
+writing. This core's packages carry rawgl compiled from its public repository, in good faith, for players of
+the original game, and will be taken down should its author object (`waterbox/package-licenses.json`). The
+integration is GPL-2.0-or-later so that it stays compatible with whichever GPL rawgl's terms turn out to be. miniz (`extern/miniz`) and TinySoundFont (`extern/TinySoundFont`) are MIT,
 zlib (`extern/zlib`) is under the zlib licence, stb_vorbis (`extern/stb`) is public domain or MIT, Munt's
 libmt32emu (`extern/munt`) is LGPL-2.1-or-later, and libchdr (`extern/libchdr`) is BSD-3-Clause, with the LZMA
 SDK's decoder (public domain), Zstandard's (BSD-3-Clause) and dr_flac (public domain or MIT-0) in it.
