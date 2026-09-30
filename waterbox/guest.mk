@@ -30,13 +30,15 @@ CXXINCS := -I$(SR)/include/c++/$(GCCVER) -I$(SR)/include/c++/$(GCCVER)/x86_64-li
 
 RAWGL_CXXFLAGS := $(WBFLAGS) $(RAWGL_CXXFLAGS_COMMON) $(CXXINCS) -w
 MINIZ_CFLAGS := $(WBFLAGS) $(MINIZ_CFLAGS_COMMON) -w
+ZLIB_CFLAGS := $(WBFLAGS) $(ZLIB_CFLAGS_COMMON) -w
 CORE_CFLAGS := $(WBFLAGS) $(CORE_CFLAGS_COMMON) $(MBINCS) -I. -Wall -Wno-unused-function
 CORE_CXXFLAGS := $(WBFLAGS) $(CORE_CXXFLAGS_COMMON) $(CXXINCS) $(MBINCS) -I. -Wall -Wno-unused-function
 
-$(call flags_stamp,$(B),$(CC) | $(CXX) | $(RAWGL_CXXFLAGS) | $(MINIZ_CFLAGS) | $(CORE_CFLAGS) | $(CORE_CXXFLAGS))
+$(call flags_stamp,$(B),$(CC) | $(CXX) | $(RAWGL_CXXFLAGS) | $(MINIZ_CFLAGS) | $(ZLIB_CFLAGS) | $(CORE_CFLAGS) | $(CORE_CXXFLAGS))
 
 RAWGL_OBJS := $(patsubst $(RAWGL)/%.cpp,$(B)/rawgl/%.o,$(RAWGL_SRCS))
 MINIZ_OBJS := $(patsubst $(MINIZ)/%.c,$(B)/miniz/%.o,$(MINIZ_SRCS))
+ZLIB_OBJS := $(patsubst $(ZLIB)/%.c,$(B)/zlib/%.o,$(ZLIB_SRCS))
 CORE_OBJS := $(addprefix $(B)/core/,$(addsuffix .o,$(CORE_C_NAMES) $(CORE_CXX_NAMES)))
 
 all: $(B)/core.wbx
@@ -54,6 +56,10 @@ $(B)/miniz/%.o: $(MINIZ)/%.c $(B)/flags | $(SR)/lib/libstdc++.a
 	@mkdir -p $(dir $@)
 	$(CC) $(MINIZ_CFLAGS) -c -o $@ $<
 
+$(B)/zlib/%.o: $(ZLIB)/%.c $(B)/flags | $(SR)/lib/libstdc++.a
+	@mkdir -p $(dir $@)
+	$(CC) $(ZLIB_CFLAGS) -c -o $@ $<
+
 $(B)/core/%.o: %.c $(CORE_HDRS) $(PATCH_STAMP) $(B)/flags | $(SR)/lib/libstdc++.a
 	@mkdir -p $(dir $@)
 	$(CC) $(CORE_CFLAGS) -c -o $@ $<
@@ -64,7 +70,7 @@ $(B)/core/%.o: %.cpp $(CORE_HDRS) $(PATCH_STAMP) $(B)/flags | $(SR)/lib/libstdc+
 
 # the guest kit's link recipe (the DOSBox-X core's): the large code model's
 # --no-relax, the weak pthread pulls libgcc_eh needs, cxxglue for the unwinder
-$(B)/core.wbx: $(CORE_OBJS) $(RAWGL_OBJS) $(MINIZ_OBJS)
+$(B)/core.wbx: $(CORE_OBJS) $(RAWGL_OBJS) $(MINIZ_OBJS) $(ZLIB_OBJS)
 	$(CXX) -static -no-pie -Wl,--eh-frame-hdr -Wl,-O2 -Wl,--no-relax -Wl,-z,stack-size=8388608 \
 		-T $(MB)/source/guest/linkscript.T \
 		-Wl,-u,pthread_once -Wl,-u,pthread_cond_wait -Wl,-u,pthread_cond_broadcast -Wl,-u,pthread_key_create \

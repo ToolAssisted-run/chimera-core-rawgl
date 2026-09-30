@@ -1,19 +1,34 @@
-/* files.c - the game's data files, out of the project's zip, and the settings.
+/* files.c - the game's data files, out of the project's file, and the settings.
  *
- * A project brings Another World as one file: a .zip of the game's folder
- * (the "game" slot, file_slots.json). Init unpacks it once into sealed memory
- * - read-only after Init, and so never part of a savestate - and the engine's
- * every open (rawgl's File, patches/0001) is answered from there by
- * rawgl_memfs_find(). The zip may hold the files at its top or in a folder:
- * the game's folder is the one holding MEMLIST.BIN or BANK01 (the Atari
- * demo's AW.TOS), and names are matched without regard to case, as rawgl does
- * on disk.
+ * A project brings Another World as one file (the "game" slot,
+ * file_slots.json): a .zip of the game's folder, or the 3DO release's disc
+ * image (.iso) as it is.
+ *
+ *   - A zip is unpacked once, at Init, into sealed memory - read-only after
+ *     Init, and so never part of a savestate - and the engine's every open
+ *     (rawgl's File, patches/0001) is answered from there by
+ *     rawgl_memfs_find(). The zip may hold the game's folder at its top or
+ *     inside a folder: the game's folder is the shallowest one holding what a
+ *     release rawgl knows is recognised by (rawgl's Resource::detectVersion):
+ *     MEMLIST.BIN (DOS), BANK01 (Amiga, Atari ST), AW.TOS (the Atari ST demo),
+ *     Data/Pak01.pak (the 15th Anniversary Edition), game/DAT/FILE017.DAT (the
+ *     20th), BANK (Windows 3.1) or GameData/File340 (3DO), or a disc image.
+ *     Names are matched without regard to case, as rawgl does on disk.
+ *   - A disc image is too large to copy for nothing: it is read where it is
+ *     mounted (rawgl_memfs_host_read), each read opening, reading and closing
+ *     it, so no host handle or file position outlives a call - miniBox's
+ *     savestates carry the machine's memory, not the host's open files. What
+ *     it keeps between reads, a cache of the last 64 KiB, is guest memory.
+ *
+ * The engine's data path is "." for a folder, or the image's name (rawgl
+ * opens an .iso it is given as its data path, resource_3do.cpp).
  */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 
 #include <emulibc.h>
 #include <waterbox_settings.h>
@@ -32,15 +47,29 @@ struct gfile
 static struct gfile *g_files;
 static int g_nfiles;
 static char g_zip_name[256];
+static char g_data_dir[256] = ".";
+
+/* the disc image, read in place */
+static char g_host_name[256];     /* its mount */
+static char g_host_path[256];     /* what the engine calls it */
+static uint32_t g_host_size;
+static int g_has_host;
+#define HOST_CACHE 65536
+static uint8_t g_host_cache[HOST_CACHE];
+static uint32_t g_host_cache_pos, g_host_cache_len;
 
 /* ------------------------------------------------------------ settings */
 
 void rawgl_settings_read(struct rawgl_settings *s)
 {
-	char lang[16] = "us";
-	wbx_setting_str("language", lang, (int)sizeof lang);
-	s->language = !strcmp(lang, "fr") ? 0 : !strcmp(lang, "de") ? 2 : !strcmp(lang, "es") ? 3 : !strcmp(lang, "it") ? 4 : 1;
+	char str[16] = "us";
+	wbx_setting_str("language", str, (int)sizeof str);
+	s->language = !strcmp(str, "fr") ? 0 : !strcmp(str, "de") ? 2 : !strcmp(str, "es") ? 3 : !strcmp(str, "it") ? 4 : 1;
 	s->random_seed = wbx_setting_long("randomSeed", 0);
+	snprintf(str, sizeof str, "normal");
+	wbx_setting_str("difficulty", str, (int)sizeof str);
+	s->difficulty = !strcmp(str, "easy") ? 0 : !strcmp(str, "hard") ? 2 : 1;
+	s->remastered_audio = wbx_setting_bool("remasteredAudio", 1);
 }
 
 /* ------------------------------------------------------------ the zip */
@@ -58,82 +87,107 @@ static int depth(const char *path)
 	return d;
 }
 
-static long read_whole(const char *name, uint8_t **out)
+static int ends_with_ci(const char *s, const char *suffix)
+{
+	const size_t n = strlen(s), m = strlen(suffix);
+	return n >= m && !strcasecmp(s + n - m, suffix);
+}
+
+/* what a release's folder is recognised by, as a path inside it; the game's
+ * folder is where the path starts. A disc image's is where it lies. */
+static const char *const k_markers[] = {
+	"memlist.bin", "bank01", "aw.tos", "data/pak01.pak", "game/dat/file017.dat", "bank", "gamedata/file340",
+};
+
+/* the length of the folder part if `path` is one of the markers there, else -1 */
+static int marker_root(const char *path)
+{
+	for (size_t i = 0; i < sizeof k_markers / sizeof k_markers[0]; i++)
+	{
+		const char *m = k_markers[i];
+		const size_t n = strlen(path), k = strlen(m);
+		if (n < k || strcasecmp(path + n - k, m)) continue;
+		if (n > k && path[n - k - 1] != '/') continue;
+		return (int)(n - k);
+	}
+	if (ends_with_ci(path, ".iso")) return (int)(base_name(path) - path);
+	return -1;
+}
+
+/* 20th Anniversary Edition: its backgrounds come in eight sizes
+ * (game/BGZ/data<W>x<H>/), of which the original renderer draws only the
+ * 320x200 ones (rawgl video.cpp copyBitmapPtr): the others are not unpacked */
+static int skipped(const char *rel)
+{
+	if (strncasecmp(rel, "game/bgz/data", 13)) return 0;
+	return strncasecmp(rel, "game/bgz/data320x200/", 21) != 0;
+}
+
+/* the start of a file: its size, or -1 when it is not there */
+static long peek(const char *name, uint8_t *buf, size_t len)
 {
 	FILE *f = fopen(name, "rb");
 	if (!f) return -1;
+	memset(buf, 0, len);
+	size_t got = fread(buf, 1, len, f);
+	(void)got;
 	fseek(f, 0, SEEK_END);
-	long n = ftell(f);
-	fseek(f, 0, SEEK_SET);
-	uint8_t *b = n > 0 ? malloc((size_t)n) : NULL;
-	if (!b || fread(b, 1, (size_t)n, f) != (size_t)n)
-	{
-		fclose(f);
-		free(b);
-		return -1;
-	}
+	const long n = ftell(f);
 	fclose(f);
-	*out = b;
 	return n;
 }
 
-int rawgl_files_load(char *err, int errsize)
+/* rawgl's own test for a 3DO disc (resource_3do.cpp OperaIso::readToc) */
+static int is_opera_image(const uint8_t *buf)
 {
-	/* the project's slot map names the file; without one, a host that is not a
-	 * project's mounts it as "rom" (chimera-run <package> <rom>), and the
-	 * core's harnesses as game.zip */
-	uint8_t *zip = NULL;
-	long zip_size = -1;
-	if (wbx_slot_name("game", 0, g_zip_name, (int)sizeof g_zip_name))
-		zip_size = read_whole(g_zip_name, &zip);
-	else
-	{
-		snprintf(g_zip_name, sizeof g_zip_name, "rom");
-		zip_size = read_whole(g_zip_name, &zip);
-		if (zip_size < 0)
-		{
-			snprintf(g_zip_name, sizeof g_zip_name, "game.zip");
-			zip_size = read_whole(g_zip_name, &zip);
-		}
-	}
-	if (zip_size < 0)
-	{
-		snprintf(err, (size_t)errsize, "Another World needs the game's files: add a .zip of the game's folder to the project (%s is not there)", g_zip_name);
-		return 0;
-	}
+	return buf[0] == 1 && !memcmp(buf + 40, "CD-ROM", 6);
+}
 
+/* the zip is read from its file as miniz asks, never whole: only what it
+ * unpacks takes memory */
+static size_t zip_read(void *opaque, mz_uint64 ofs, void *buf, size_t n)
+{
+	FILE *f = opaque;
+	if (fseek(f, (long)ofs, SEEK_SET) != 0) return 0;
+	return fread(buf, 1, n, f);
+}
+
+static int load_zip(FILE *zf, long zip_size, char *err, int errsize)
+{
 	mz_zip_archive za;
 	memset(&za, 0, sizeof za);
-	if (!mz_zip_reader_init_mem(&za, zip, (size_t)zip_size, 0))
+	za.m_pRead = zip_read;
+	za.m_pIO_opaque = zf;
+	if (!mz_zip_reader_init(&za, (mz_uint64)zip_size, 0))
 	{
-		snprintf(err, (size_t)errsize, "%s is not a zip file: the game's files come as a .zip of its folder", g_zip_name);
-		free(zip);
+		snprintf(err, (size_t)errsize, "%s is not a zip file: the game's files come as a .zip of its folder, or the 3DO disc's image (.iso)", g_zip_name);
 		return 0;
 	}
 	const int n = (int)mz_zip_reader_get_num_files(&za);
 
-	/* the game's folder: where the shallowest MEMLIST.BIN / BANK01 / AW.TOS is */
+	/* the game's folder: where the shallowest marker is */
 	char root[256] = "";
 	int best = 1 << 30, found = 0;
 	for (int i = 0; i < n; i++)
 	{
 		mz_zip_archive_file_stat st;
 		if (!mz_zip_reader_file_stat(&za, (mz_uint)i, &st) || st.m_is_directory) continue;
-		const char *b = base_name(st.m_filename);
-		if (strcasecmp(b, "memlist.bin") && strcasecmp(b, "bank01") && strcasecmp(b, "aw.tos")) continue;
-		const int d = depth(st.m_filename);
+		const int r = marker_root(st.m_filename);
+		if (r < 0) continue;
+		char folder[256];
+		snprintf(folder, sizeof folder, "%.*s", r, st.m_filename);
+		const int d = depth(folder);
 		if (d < best)
 		{
 			best = d;
 			found = 1;
-			snprintf(root, sizeof root, "%.*s", (int)(b - st.m_filename), st.m_filename);
+			snprintf(root, sizeof root, "%s", folder);
 		}
 	}
 	if (!found)
 	{
-		snprintf(err, (size_t)errsize, "%s holds no Another World data: the game's folder has MEMLIST.BIN and the BANK files (DOS), or the BANK files alone (Amiga, Atari ST)", g_zip_name);
+		snprintf(err, (size_t)errsize, "%s holds no Another World data: the game's folder has MEMLIST.BIN and the BANK files (DOS), the BANK files (Amiga, Atari ST), Data/Pak01.pak (15th Anniversary), game/ (20th Anniversary), BANK and WORLD.EXE (Windows 3.1) or GameData/ (3DO)", g_zip_name);
 		mz_zip_reader_end(&za);
-		free(zip);
 		return 0;
 	}
 
@@ -144,47 +198,116 @@ int rawgl_files_load(char *err, int errsize)
 		mz_zip_archive_file_stat st;
 		if (!mz_zip_reader_file_stat(&za, (mz_uint)i, &st) || st.m_is_directory) continue;
 		if (strncmp(st.m_filename, root, rootlen) != 0 || strlen(st.m_filename + rootlen) >= sizeof g_files[0].path) continue;
-		if (st.m_uncomp_size > 64u << 20)
+		if (skipped(st.m_filename + rootlen)) continue;
+		if (st.m_uncomp_size > 0xFFFFFFF0u)
 		{
-			snprintf(err, (size_t)errsize, "%s in %s is too large for the game's data (%llu bytes)", st.m_filename, g_zip_name, (unsigned long long)st.m_uncomp_size);
+			snprintf(err, (size_t)errsize, "%s in %s is too large (%llu bytes)", st.m_filename, g_zip_name, (unsigned long long)st.m_uncomp_size);
 			mz_zip_reader_end(&za);
-			free(zip);
 			return 0;
 		}
 		uint8_t *data = alloc_sealed(st.m_uncomp_size ? (size_t)st.m_uncomp_size : 1);
 		if (!data || !mz_zip_reader_extract_to_mem(&za, (mz_uint)i, data, (size_t)st.m_uncomp_size, 0))
 		{
-			snprintf(err, (size_t)errsize, "%s in %s could not be unpacked", st.m_filename, g_zip_name);
+			snprintf(err, (size_t)errsize, "%s in %s could not be unpacked%s", st.m_filename, g_zip_name, data ? "" : " (out of memory)");
 			mz_zip_reader_end(&za);
-			free(zip);
 			return 0;
 		}
 		struct gfile *g = &g_files[g_nfiles++];
 		snprintf(g->path, sizeof g->path, "%s", st.m_filename + rootlen);
 		g->data = data;
 		g->size = (uint32_t)st.m_uncomp_size;
+		/* a disc image in the zip is the data path (rawgl opens it as one) */
+		if (ends_with_ci(g->path, ".iso") && !strchr(g->path, '/') && g->size >= 128 && is_opera_image(g->data))
+			snprintf(g_data_dir, sizeof g_data_dir, "%s", g->path);
 	}
 	mz_zip_reader_end(&za);
-	free(zip);
 	return 1;
 }
 
-int rawgl_files_count(void) { return g_nfiles; }
+int rawgl_files_load(char *err, int errsize)
+{
+	/* the project's slot map names the file; without one, a host that is not a
+	 * project's mounts it as "rom" (chimera-run <package> <rom>), and the
+	 * core's harnesses as game.zip, or game.iso */
+	static const char *const fallbacks[] = { "rom", "game.zip", "game.iso" };
+	uint8_t head[128];
+	long size = -1;
+	const int from_slot = wbx_slot_name("game", 0, g_zip_name, (int)sizeof g_zip_name) != NULL;
+	if (from_slot)
+		size = peek(g_zip_name, head, sizeof head);
+	else
+		for (size_t i = 0; i < sizeof fallbacks / sizeof fallbacks[0] && size < 0; i++)
+		{
+			snprintf(g_zip_name, sizeof g_zip_name, "%s", fallbacks[i]);
+			size = peek(g_zip_name, head, sizeof head);
+		}
+	if (size < 0)
+	{
+		if (from_slot)
+			snprintf(err, (size_t)errsize, "Another World needs the game's files: %s, the project's game file, is not there", g_zip_name);
+		else
+			snprintf(err, (size_t)errsize, "Another World needs the game's files: add a .zip of the game's folder (or the 3DO disc's .iso) to the project");
+		return 0;
+	}
+
+	if (size >= 128 && is_opera_image(head))
+	{
+		/* the 3DO disc, read where it is; the engine is told its name ends in .iso */
+		snprintf(g_host_name, sizeof g_host_name, "%s", g_zip_name);
+		snprintf(g_host_path, sizeof g_host_path, "game.iso");
+		snprintf(g_data_dir, sizeof g_data_dir, "%s", g_host_path);
+		g_host_size = (uint32_t)size;
+		g_has_host = 1;
+		return 1;
+	}
+
+	FILE *zf = fopen(g_zip_name, "rb");
+	if (!zf)
+	{
+		snprintf(err, (size_t)errsize, "%s could not be read", g_zip_name);
+		return 0;
+	}
+	const int ok = load_zip(zf, size, err, errsize);
+	fclose(zf);
+	return ok;
+}
+
+/* the SoundFont Windows 3.1's MIDI music is played with: the project's
+ * "soundfont" slot, or soundfont.sf2 for a harness; NULL when there is none */
+FILE *rawgl_files_soundfont(void)
+{
+	char name[256];
+	if (!wbx_slot_name("soundfont", 0, name, (int)sizeof name)) snprintf(name, sizeof name, "soundfont.sf2");
+	return fopen(name, "rb");
+}
+
+int rawgl_files_count(void) { return g_nfiles + g_has_host; }
+
+const char *rawgl_files_data_dir(void) { return g_data_dir; }
+
+/* ------------------------------------------------------------ the engine's opens */
 
 /* the engine asks for "<datapath>/<name>", its data path being "." - so
  * "./bank01", "./Data/Pak01.pak": the leading "./" and any "." folders go, and
  * the rest is matched without regard to case */
-const uint8_t *rawgl_memfs_find(const char *path, uint32_t *size)
+static void normalise(const char *path, char *want, size_t cap)
 {
-	char want[256];
 	size_t w = 0;
-	while (*path && w < sizeof want - 1)
+	while (*path && w < cap - 1)
 	{
 		if (path[0] == '.' && path[1] == '/') { path += 2; continue; }
+		if (path[0] == '.' && path[1] == 0 && (w == 0 || want[w - 1] == '/')) { path++; continue; }
 		if (path[0] == '/' && (w == 0 || want[w - 1] == '/')) { path++; continue; }
 		want[w++] = *path++;
 	}
+	while (w > 0 && want[w - 1] == '/') w--;
 	want[w] = 0;
+}
+
+const uint8_t *rawgl_memfs_find(const char *path, uint32_t *size)
+{
+	char want[256];
+	normalise(path, want, sizeof want);
 	for (int i = 0; i < g_nfiles; i++)
 		if (!strcasecmp(g_files[i].path, want))
 		{
@@ -192,4 +315,65 @@ const uint8_t *rawgl_memfs_find(const char *path, uint32_t *size)
 			return g_files[i].data;
 		}
 	return NULL;
+}
+
+int rawgl_memfs_host(const char *path, uint32_t *size)
+{
+	char want[256];
+	normalise(path, want, sizeof want);
+	if (!g_has_host || strcasecmp(want, g_host_path)) return -1;
+	*size = g_host_size;
+	return 0;
+}
+
+uint32_t rawgl_memfs_host_read(int id, uint32_t pos, void *ptr, uint32_t len)
+{
+	if (id != 0 || !g_has_host) return 0;
+	uint8_t *out = ptr;
+	uint32_t done = 0;
+	while (done < len)
+	{
+		const uint32_t at = pos + done;
+		if (at < g_host_cache_pos || at >= g_host_cache_pos + g_host_cache_len)
+		{
+			/* the block holding it, opened, read and closed within this call */
+			g_host_cache_pos = at - at % HOST_CACHE;
+			g_host_cache_len = 0;
+			FILE *f = fopen(g_host_name, "rb");
+			if (!f) break;
+			if (fseek(f, (long)g_host_cache_pos, SEEK_SET) == 0)
+				g_host_cache_len = (uint32_t)fread(g_host_cache, 1, HOST_CACHE, f);
+			fclose(f);
+			if (at >= g_host_cache_pos + g_host_cache_len) break;
+		}
+		uint32_t n = g_host_cache_pos + g_host_cache_len - at;
+		if (n > len - done) n = len - done;
+		memcpy(out + done, g_host_cache + (at - g_host_cache_pos), n);
+		done += n;
+	}
+	return done;
+}
+
+/* patches/0001: rawgl's stat() - a file of the game's is a regular file, a
+ * folder any of them is in is a folder, and the rest is not there */
+int rawgl_memfs_stat(const char *path, struct stat *st)
+{
+	char want[256];
+	normalise(path, want, sizeof want);
+	memset(st, 0, sizeof *st);
+	uint32_t size;
+	if (rawgl_memfs_find(want, &size) || rawgl_memfs_host(want, &size) == 0)
+	{
+		st->st_mode = S_IFREG | 0444;
+		st->st_size = size;
+		return 0;
+	}
+	const size_t n = strlen(want);
+	for (int i = 0; i < g_nfiles; i++)
+		if (n == 0 || (!strncasecmp(g_files[i].path, want, n) && g_files[i].path[n] == '/'))
+		{
+			st->st_mode = S_IFDIR | 0555;
+			return 0;
+		}
+	return -1;
 }

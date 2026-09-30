@@ -5,6 +5,9 @@
 ROOT := ..
 RAWGL := $(ROOT)/extern/rawgl
 MINIZ := $(ROOT)/extern/miniz
+ZLIB  := $(ROOT)/extern/zlib
+STB   := $(ROOT)/extern/stb
+TSF   := $(ROOT)/extern/TinySoundFont
 MB    ?= $(or $(MINIBOX_DIR),$(HOME)/chimera/extern/chimera-common-minibox)
 
 # ---- rawgl, upstream: its Makefile's SRCS less its frontend - main.cpp,
@@ -24,28 +27,41 @@ RAWGL_SRCS := $(addprefix $(RAWGL)/,$(addsuffix .cpp,$(RAWGL_NAMES)))
 # -DNDEBUG): upstream's checks on the data are part of the program, and a
 # failed one halts the machine with its message (halt.c) where upstream's
 # process would abort.
-RAWGL_CXXFLAGS_COMMON := -std=gnu++11 -O2 -UNDEBUG -DRAWGL_MEMFS -Icompat -I$(RAWGL) -I$(MINIZ) -DMINIZ_NO_STDIO -DMINIZ_NO_TIME
+RAWGL_CXXFLAGS_COMMON := -std=gnu++11 -O2 -UNDEBUG -DRAWGL_MEMFS -Icompat -I$(RAWGL) -I$(ZLIB)
 
 # ---- miniz (the submodule extern/miniz, tag 3.0.2): the zip reader the
-# project's game files come through, and the zlib the engine's 15th/20th
-# Anniversary readers link against (the core refuses those releases, but
-# resource_nth.cpp is built as upstream builds it)
+# project's game files come through. Its zlib-compatible names are off:
+# zlib itself is below.
 MINIZ_NAMES := miniz miniz_tdef miniz_tinfl miniz_zip
 MINIZ_SRCS := $(addprefix $(MINIZ)/,$(addsuffix .c,$(MINIZ_NAMES)))
 # miniz runs at Init, off the engine's stack: its assertions are off in both
 # builds (the guest flags' -DNDEBUG, and here the native build's)
-MINIZ_CFLAGS_COMMON := -std=gnu11 -O2 -DNDEBUG -Icompat -I$(MINIZ) -DMINIZ_NO_STDIO -DMINIZ_NO_TIME
+MINIZ_DEFS := -DMINIZ_NO_STDIO -DMINIZ_NO_TIME -DMINIZ_NO_ZLIB_COMPATIBLE_NAMES
+MINIZ_CFLAGS_COMMON := -std=gnu11 -O2 -DNDEBUG -Icompat -I$(MINIZ) $(MINIZ_DEFS)
+
+# ---- zlib (the submodule extern/zlib, tag v1.3.1): the gzip inflate the 20th
+# Anniversary Edition's pictures and sounds (.bgz, .wgz) are read with
+# (resource_nth.cpp inflateGzip) - its inflate half only
+ZLIB_NAMES := adler32 crc32 inffast inflate inftrees zutil
+ZLIB_SRCS := $(addprefix $(ZLIB)/,$(addsuffix .c,$(ZLIB_NAMES)))
+ZLIB_CFLAGS_COMMON := -std=gnu11 -O2 -DNDEBUG -I$(ZLIB)
+
+# ---- stb_vorbis (extern/stb) and TinySoundFont (extern/TinySoundFont): the
+# 20th Anniversary Edition's Ogg Vorbis music and Windows 3.1's MIDI music,
+# compiled in the core's own translation units (vorbis.c, midi.c) over its
+# deterministic math (detmath.h)
 
 # ---- the core
-CORE_C_NAMES := coro files halt wbx-entry
+CORE_C_NAMES := coro files halt midi vorbis wbx-entry
 CORE_CXX_NAMES := rawgl-driver sdl-shim
-CORE_HDRS := rawgl-driver.h rawgl-files.h rawgl-audio.h coro.h $(wildcard compat/*.h) $(wildcard $(RAWGL)/*.h)
-CORE_CFLAGS_COMMON := -std=gnu11 -O2 -Icompat -I$(MINIZ) -DMINIZ_NO_STDIO -DMINIZ_NO_TIME
-CORE_CXXFLAGS_COMMON := $(RAWGL_CXXFLAGS_COMMON)
+CORE_HDRS := rawgl-driver.h rawgl-files.h rawgl-audio.h coro.h midi.h detmath.h $(wildcard compat/*.h) $(wildcard $(RAWGL)/*.h)
+CORE_CFLAGS_COMMON := -std=gnu11 -O2 -Icompat -I$(MINIZ) $(MINIZ_DEFS) -I$(STB) -I$(TSF)
+CORE_CXXFLAGS_COMMON := $(RAWGL_CXXFLAGS_COMMON) -I$(STB)
 
-# the calls the core answers itself: the engine's clock at start (the random
-# seed) is the project's setting (rawgl-driver.cpp)
-WRAP_FLAGS := -Wl,--wrap=time
+# the calls the core answers itself (rawgl-driver.cpp): the engine's clock at
+# start (the random seed) is the project's setting, and rand() is the same
+# generator in both builds
+WRAP_FLAGS := -Wl,--wrap=time -Wl,--wrap=rand -Wl,--wrap=srand
 
 # the patch series goes onto the submodule before anything of rawgl builds
 PATCH_STAMP := $(ROOT)/build/patches.stamp

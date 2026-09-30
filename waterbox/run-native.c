@@ -32,6 +32,7 @@ extern uint8_t *GetMemoryDomainPtr(int i);
 extern int64_t GetMemoryDomainSize(int i);
 extern uint64_t GetCycleCount(void);
 extern const char *GetGameProperties(void);
+extern int IsButtonActive(int32_t index);
 
 static void frame(void) { FrameAdvance(0); }
 static const uint32_t *video(int *w, int *h)
@@ -80,6 +81,7 @@ int main(int argc, char **argv)
 		.set_rendering = SetRenderingEnabled,
 		.clock = GetCycleCount,
 		.game_properties = GetGameProperties,
+		.button_active = IsButtonActive,
 	};
 	return gate_run(&c, &o);
 }

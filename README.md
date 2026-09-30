@@ -6,52 +6,97 @@
 sound channels and music player, stepped one frame of the game at a time in miniBox's sandbox, packaged as
 `rawgl.chimeraCore`.
 
-**Built on upstream rawgl, with two patches**: the first serves the engine's file opens from memory (the
-project's zip, unpacked at start), the second hands a fatal error to the core before rawgl would exit.
-Everything else is rawgl compiled from source - its script interpreter, its software renderer, its mixer
-(compiled as it is, against an SDL_mixer of the core's) - without its SDL and OpenGL frontend, which the core
-is instead.
+**Built on upstream rawgl, with two patches**: the first serves the engine's file opens (and its `stat()`)
+from the project's file, the second hands a fatal error to the core before rawgl would exit. Everything else is
+rawgl compiled from source - its script interpreter, its software renderer, its mixer (compiled as it is,
+against an SDL_mixer of the core's) - without its SDL and OpenGL frontend, which the core is instead. The
+core's SDL_mixer plays what rawgl asks of it with miniz, zlib, stb_vorbis and TinySoundFont, over its own
+deterministic math (`waterbox/detmath.h`), so the sandbox and the native reference make the same sound.
 
 ## What it is
 
-- **Another World's DOS, Amiga and Atari ST releases** (and the Atari ST demo), from the user's own files: a
-  project brings the game's folder as **one .zip** (the "game" slot) - the DOS release's `MEMLIST.BIN` and
-  `BANK01`..`BANK0D`, or the Amiga's or the Atari ST's `BANK` files - at the zip's top or in a folder, names in
-  any case. The core unpacks it into sealed memory at start (no savestate carries it). The package carries
-  none of the game's data. The 15th and 20th Anniversary Editions, the Windows 3.1 and the 3DO releases are
-  refused by name ("These are the 15th Anniversary Edition's files: the core plays the DOS, Amiga and Atari ST
-  releases"); so are a project without the zip, a file that is not a zip, and a zip with no game in it.
+- **Every release rawgl plays**, from the user's own files: a project brings the game as **one file** (the
+  "game" slot) - a .zip of the game's folder, at its top or in a folder, names in any case, or the 3DO disc's
+  image (.iso) as it is. The core unpacks a zip into sealed memory at start (no savestate carries it) and reads a
+  disc image where it lies, a block at a time, holding nothing of the host's between two reads. The package
+  carries none of the game's data. A project without the file, a file that is not a zip or a disc, a zip with no
+  game in it, and data rawgl cannot tell are refused, saying why.
+
+  | Release | The folder is recognised by | Starts at | Sound | Picture |
+  |---|---|---|---|---|
+  | DOS | MEMLIST.BIN + BANK01..BANK0D | the copy protection (the demo: the intro) | rawgl's 4 channels and module player | original, 320x200 |
+  | DOS demo | MEMLIST.BIN + DEMO01.. | the intro | the same | the same |
+  | Amiga (French, English) | BANK01 of 244,674 / 244,868 bytes | the copy protection | the same | the same |
+  | Atari ST | BANK01 of 227,142 bytes | the copy protection | the same | the same |
+  | Atari ST demo | AW.TOS of 96,513 bytes | the intro | the same | the same |
+  | 15th Anniversary Edition | Data/Pak01.pak | the intro | WAV sounds, WAV music (original or remastered) | original, 320x200 (see below) |
+  | 20th Anniversary Edition | game/DAT/FILE017.DAT | the intro | gzip'd WAV sounds, Ogg Vorbis music (original or remastered) | original, 320x200 (see below) |
+  | Windows 3.1 | BANK (+ WORLD.EXE) | the copy protection | WAV sounds, MIDI music (with the project's SoundFont) | original, 320x200 |
+  | 3DO | GameData/File340, or the disc image | its logos, title and menu | AIFF sounds, SDX2 AIFF-C songs | 15-bit colour, and its full-screen pictures |
+
+  The anniversary editions run in rawgl's software renderer, as its "original" renderer draws them: the game's
+  polygons and its 320x200 pictures, at 320x200. Their HD pictures (1280x800 and up) are drawn only by rawgl's
+  OpenGL renderer, which the core does not have; whether a software renderer for them is worth writing is a
+  question for when the editions' data is at hand.
 - **The game starts where the original starts**: rawgl is built without its `BYPASS_PROTECTION` (upstream's
-  Makefile defines it), so the DOS release with a password screen, the Amiga and the Atari ST begin at the
-  copy protection's symbols, as the originals did. Nothing of the core offers a way around it.
+  Makefile defines it), so the DOS release with a password screen, the Amiga, the Atari ST and Windows 3.1
+  begin at the copy protection's symbols, as the originals did. Nothing of the core offers a way around it.
 - **A frame is one step of the game**: one frame the game shows, held for as many fiftieths of a second as its
-  script says (`VAR_PAUSE_SLICES`; most of the game 4, 12.5 Hz). The pause is 50 ms steps until P comes again.
-  `GetVsyncNumerator/Denominator` report the step just run (1000 / its milliseconds). Every step reads the
-  controls. A step is cut at a second of the machine's time, which bounds its sound.
+  script says (`VAR_PAUSE_SLICES`; most of the game 4, 12.5 Hz), sixtieths on the 3DO. The pause, and the
+  3DO's logos, title and menus, are 50 ms steps while the game waits. `GetVsyncNumerator/Denominator` report
+  the step just run (1000 / its milliseconds). A step is cut at a second of the machine's time.
 - **Time is the machine's**: rawgl's clock (`getTimeStamp`) is a counter only the game's own waits move, and a
   wait runs the engine's mixer for exactly the samples it covers - the music player tells the script where it
-  is (`VAR_MUSIC_SYNC`), so the sound, and every scene that waits on it, is a function of the inputs. The one
-  reading of the wall clock rawgl makes, at start, for its random seed, is the **Random seed** setting.
-- **The controls are rawgl's**: P1 Up, Down, Left, Right (the joystick; Up jumps, Down crouches) and Action
-  (fire: run, shoot, charge the gun; Space or Enter), then Code (C, to the password screen, where a release
-  has one) and Pause (P), then the letters and Backspace, which only the password screen reads. A button held
-  is the key held; a button pressed is the key typed, once. rawgl's screenshot and fast-mode keys are left out
-  (the frontend's business; fast mode would change the timing), and so are its 3DO-only keys.
-- **Settings**: Language (rawgl's `--language`: the texts, and the DOS release's title screen, "Another World"
-  in French and "Out of This World" otherwise) and Random seed (0..65535).
+  is (`VAR_MUSIC_SYNC`), so the sound, and every scene that waits on it, is a function of the inputs. rawgl's
+  readings of the wall clock (the random seed, the 20th's `srand`) are the **Random seed** setting, and its
+  `rand()` is one generator in every build.
+- **The controls are rawgl's**: P1 Up, Down, Left, Right (Up jumps, Down crouches), Action (fire: Space or
+  Enter) and, on the 3DO, Jump (Shift); then Code (C), Pause (P) and, on the 3DO, Back (Escape, its end
+  menu); then the letters and Backspace, which only the password screen reads. A button pressed is a key going
+  down and a button let go a key coming up, as rawgl's SDL frontend sees them - so where the game takes a
+  press (a menu, a picture it waits on), a button still held is not pressed again until it is let go. Jump and
+  Back exist on the 3DO only (`IsButtonActive`).
+- **Settings**: Language, Random seed (0..65535), Difficulty (the 20th's, rawgl's `--difficulty`) and
+  Remastered Sound (the anniversary editions', rawgl's `--audio`).
 - **Properties** (Chimera's `docs/game-cores.md`): a `Game State` block (the part, the part to come, the
   screen, the release, the language, the machine's steps and milliseconds, whether the music plays, whether
   the engine halted) and the game's **256 script variables** in place (`Script Variables`, writable): the
   engine's named ones (`VAR_HERO_*`, `VAR_MUSIC_SYNC`, `VAR_PAUSE_SLICES`...), Lester's and the world's under
   the names JaffarPlus's Another World gives them, and all 256 as `Var[0..255]`.
-- **A fault in the data halts the machine, not the frontend**: rawgl's `error()` (an invalid opcode, a
-  resource it cannot read) and its failed assertions stop the engine where it stands with the reason; the
-  machine keeps stepping, silent, at 50 Hz, with `Machine.Halted` set.
+- **A fault in the data halts the machine, not the frontend**: rawgl's `error()` and its failed assertions stop
+  the engine where it stands with the reason; the machine keeps stepping, silent, at 50 Hz, with
+  `Machine.Halted` set.
+
+## What has been run
+
+**No release's real data has run in this core yet**: none is on the machines it was built on. Every release has
+run as the core's **synthetic game** - its own bytecode, pictures, sounds and music written in that release's
+format (`waterbox/tests/make-synthetic.py`) - through the whole path its files take: native == sandbox,
+rerecord, session. That proves the core's side (the files, the step, the clock, the sound decoders, the
+savestates) on each release's formats; it does not prove the releases' own content (their scripts, their
+compressed resources - the DOS banks' ByteKiller packing, Windows 3.1's LZ-Huffman, the 3DO's LZSS and coded
+cels as the real files use them, the 15th's TooDC encoding - their copy protections, their timing). `run-gate.sh
+-g <zip or iso>` runs the equivalence, rerecord and session legs on a real release.
+
+| Release | Synthetic game | Real files |
+|---|---|---|
+| DOS | yes | needs files |
+| DOS demo | (the DOS path, less the password screen) | needs files |
+| Amiga French / English | no (rawgl finds its resources by a built-in table keyed on BANK01's size) | needs files |
+| Atari ST | no (the same) | needs files |
+| Atari ST demo | no (the same, AW.TOS) | needs files |
+| 15th Anniversary Edition | yes: Pak01.pak, WAV sounds and music, original and remastered | needs files |
+| 20th Anniversary Edition | yes: game/, gzip'd sounds, Ogg music, difficulty, original and remastered | needs files |
+| Windows 3.1 | yes: BANK (unpacked entries), its palettes, WAV, MIDI with a SoundFont | needs files (and a SoundFont) |
+| 3DO | yes: GameData/ and a disc image, logos and title, AIFF, SDX2, a coded cel | needs files |
 
 ## The patches
 
-- `0001-memory-files.patch`: under `RAWGL_MEMFS`, rawgl's `File` opens through `rawgl_memfs_find()` - the
-  core's table of the zip's files - and its case-insensitive directory walk is not built.
+- `0001-memory-files.patch`: under `RAWGL_MEMFS`, rawgl's `File` opens through the core - `rawgl_memfs_find()`,
+  the zip's files in memory, or `rawgl_memfs_host_read()`, a disc image read by position - its `stat()` asks
+  the core too, a read past a file's end gives zeros (rawgl's `File::readByte` leaves its byte uninitialised
+  otherwise, and the 3DO's song player reads past each song), and its case-insensitive directory walk is not
+  built.
 - `0002-error-hook.patch`: `error()` calls a weak `rawgl_error_hook()` before it exits; the core's halts the
   machine instead.
 
@@ -72,22 +117,27 @@ with its C++ guest toolchain built (`meson setup build/meson-cpp -Dguest_cpp=tru
 
 `./waterbox/run-gate.sh [-m <miniBox>] [-c <chimera-run>] [-g <Another World zip>]`. Another World's data is
 not the core's to carry, so the gate's content is **a game of its own**: `tests/make-synthetic.py` writes a
-four-part "game" in the DOS release's format - its own bytecode, palettes, polygons, a sound and a music module
-- which goes through the same path a real game takes: a copy-protection part to start at, an intro with music
-that goes on by itself, a part the joystick plays (fire's sound, the seed's marker, the music's marker, the
-pause, Code) and a password screen. Over it: native == sandbox (every step's picture, sound, length and lag,
-the clock, the memory), a savestate before every step, a new host in the middle (while paused), turbo, the
-two settings in both builds, the slot map, six refusals, the two halts in both builds, no host clock in the
-guest, teeth, and with `-c` the package through Chimera's own engine (chimera-run). With `-g`, the
-equivalence, rerecord and session legs also run on the real game from power-on.
+four-part "game" - its own bytecode, palettes, polygons, sounds and music - in each release's format, which
+goes through the same path that release's files take: a copy-protection part to start at (or the 3DO's logos
+and title), an intro with music that goes on by itself, a part the joystick plays (fire's sound, the seed's
+marker, the music's marker, the pause, Code) and a password screen. Over it: native == sandbox (every step's
+picture, sound, length and lag, the clock, the memory), a savestate before every step, a new host in the middle,
+for DOS, the 15th and 20th Anniversary Editions, Windows 3.1, the 3DO folder and the 3DO disc; the 3DO's folder
+and disc the same machine; turbo; the settings in both builds; the SoundFont changing Windows 3.1's sound and
+nothing else; the slot map; six refusals; the two halts in both builds; no host clock in the guest; teeth; and
+with `-c` the package through Chimera's own engine (chimera-run). With `-g`, the equivalence, rerecord and
+session legs also run on a real release from power-on. `tests/tune.ogg` (the 20th's test music) is the
+generator's MIDI tune rendered by TiMidity++ with FluidR3_GM (MIT).
 
 ## Where things are
 
 - `waterbox/rawgl-driver.cpp`: the machine - rawgl's `SystemStub` answered by the core, the engine on its own
   stack (`coro.c`), the step, the clock, the input, the picture, the domains and the property table.
-- `waterbox/sdl-shim.cpp`, `waterbox/compat/`: the SDL, SDL_mixer, zlib (miniz) and libmt32emu that rawgl's
-  sources ask for; only the mixer's music hook does anything.
-- `waterbox/files.c`: the zip, the slot map and the settings. `waterbox/halt.c`: a failed assertion halts.
+- `waterbox/sdl-shim.cpp`, `waterbox/compat/`: the SDL, SDL_mixer and libmt32emu that rawgl's sources ask for:
+  the music (WAV, `vorbis.c`, `midi.c`), the channels (AIFF, WAV), the mixing order, resampling.
+- `waterbox/detmath.h`: sin, cos, exp, log and pow for the decoders, the same in every build.
+- `waterbox/files.c`: the zip, the disc image, the slot map, the SoundFont and the settings. `waterbox/halt.c`: a
+  failed assertion halts.
 - `waterbox/wbx-entry.c`: the exports. `run-native.c`, `run-wbx.c`, `gate-harness.h`: the harnesses.
 - `waterbox/tests/`: the synthetic game and its movie.
 - `docs/PLAN.md`: the decisions and what is left.
@@ -99,4 +149,5 @@ sources name Gregory Montoir's copyright without terms. Its predecessor, raw, is
 GPL (Fabien Sanglard's Another-World-Bytecode-Interpreter is GPL-2.0), but rawgl itself grants nothing in
 writing; until its author states terms, a package of this core is for private use and not to be redistributed
 (`waterbox/package-licenses.json`). The integration is GPL-2.0-or-later so that it stays compatible with
-whichever GPL that turns out to be. miniz (`extern/miniz`) is MIT.
+whichever GPL that turns out to be. miniz (`extern/miniz`) and TinySoundFont (`extern/TinySoundFont`) are MIT,
+zlib (`extern/zlib`) is under the zlib licence, stb_vorbis (`extern/stb`) is public domain or MIT.

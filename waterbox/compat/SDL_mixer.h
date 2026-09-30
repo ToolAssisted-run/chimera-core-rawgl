@@ -1,10 +1,8 @@
 /* SDL_mixer.h - the SDL_mixer calls rawgl's mixer.cpp makes, answered by the
- * core (sdl-shim.cpp). Only the music hook does anything: it is how the
- * engine's own mixer (its four sound channels and the music module player)
- * produces sound, and the core runs it at the end of every span of time the
- * machine sleeps. The mixer's chunk and music calls are the 3DO's, the
- * anniversary editions' and the MT-32's paths, which the core does not play:
- * they load nothing and play nothing. */
+ * core (sdl-shim.cpp): the music hook (rawgl's own mixer, the 3DO's songs),
+ * the post-mix callback (the anniversary editions' and Windows 3.1's WAV
+ * channels), the music (WAV, Ogg Vorbis, MIDI) and the channels (the 3DO's
+ * AIFF sounds). The structures are the core's. */
 #ifndef RAWGL_CORE_SDL_MIXER_H
 #define RAWGL_CORE_SDL_MIXER_H
 

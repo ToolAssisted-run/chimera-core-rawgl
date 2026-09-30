@@ -4,3 +4,12 @@
 [submodule "extern/miniz"]
 	path = extern/miniz
 	url = https://github.com/richgel999/miniz.git
+[submodule "extern/zlib"]
+	path = extern/zlib
+	url = https://github.com/madler/zlib.git
+[submodule "extern/stb"]
+	path = extern/stb
+	url = https://github.com/nothings/stb.git
+[submodule "extern/TinySoundFont"]
+	path = extern/TinySoundFont
+	url = https://github.com/schellingb/TinySoundFont.git

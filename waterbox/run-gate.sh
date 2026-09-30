@@ -10,11 +10,20 @@
 #   session      saved at a step, a new host, loaded, finished = without
 #   turbo        the first half not drawn: the rest the same, and the first
 #                half's pictures really not drawn
+#   releases     the synthetic game as the 15th and 20th Anniversary Editions,
+#                Windows 3.1 and the 3DO (its folder, and its disc image read
+#                in place): native = sandbox, rerecord, session, each; the
+#                3DO's folder and disc the same machine; Jump and Back the
+#                3DO's only; the SoundFont changes Windows 3.1's sound and
+#                nothing else
 #   settings     randomSeed is what the script's seed starts at, language what
-#                the DOS copy protection's title choice reads (both builds)
+#                the DOS copy protection's title choice reads, difficulty and
+#                remasteredAudio what the anniversary editions read (both
+#                builds)
 #   slots        the project's slot map names the zip
-#   refusals     no zip, not a zip, no game in it, data rawgl cannot tell, an
-#                anniversary edition, a seed out of range: each says why
+#   refusals     no zip, not a zip, no game in it, data rawgl cannot tell, a
+#                15th Anniversary Edition's Pak01.pak that is not one, a seed
+#                out of range: each says why
 #   halts        rawgl's error() and a failed assertion halt the machine, which
 #                keeps stepping; the same in both builds
 #   clock        the guest has no time() of its own: the one it calls is the
@@ -106,6 +115,50 @@ else
 	fail "turbo"; diff "$work/t.d" "$work/n.d" | head
 fi
 
+echo "== releases"
+digest_run() { # digest_run <native|wbx> <dir> <frames> <movie> [options] > out
+	b=$1; d=$2; n=$3; m=$4; shift 4
+	if [ "$b" = native ]; then "$native" "$d" --frames "$n" --movie "$m" "$@" 2>/dev/null
+	else "$wbx" "$core" "$d" --frames "$n" --movie "$m" "$@" 2>/dev/null; fi
+}
+for rel in 15th 20th win31 3do 3do-iso; do
+	case $rel in
+		15th|20th) m="$here/tests/synthetic-nth.movie"; n=90 ;;
+		win31) m="$movie"; n=100 ;;
+		*) m="$here/tests/synthetic-3do.movie"; n=110 ;;
+	esac
+	d="$work/rel-$rel"
+	mkdir -p "$d"
+	if [ $rel = 3do-iso ]; then python3 "$here/tests/make-synthetic.py" --release $rel "$d/game.iso"
+	else python3 "$here/tests/make-synthetic.py" --release $rel "$d/game.zip"; fi
+	[ $rel = win31 ] && cp "$root/extern/TinySoundFont/examples/florestan-subset.sf2" "$d/soundfont.sf2"
+	digest_run native "$d" $n "$m" --trace "$d/t" --trace-props "Game.Release,Game.Part" > "$d/n"
+	digest_run wbx "$d" $n "$m" > "$d/w"
+	digest_run wbx "$d" $n "$m" --rerecord > "$d/r"
+	digest_run wbx "$d" $n "$m" --session-at $((n * 3 / 5)) > "$d/s"
+	parts="$(awk 'NR > 1 { print $5 }' "$d/t" | uniq | tr '\n' ' ')"
+	what="release $(awk 'NR == 2 { print $4 }' "$d/t"), parts ${parts% }"
+	same "releases ($rel)" "$d/w" "$d/n" "native = sandbox, $n steps ($what)"
+	same "releases ($rel)" "$d/r" "$d/w" "rerecord = straight"
+	same "releases ($rel)" "$d/s" "$d/w" "session at step $((n * 3 / 5)) = straight"
+done
+same "releases (3do)" "$work/rel-3do-iso/n" "$work/rel-3do/n" "the disc image, read in place = the GameData folder"
+if [ "$(value "$work/rel-3do/n" activeButtons)" = 36 ] && [ "$(value "$work/rel-15th/n" activeButtons)" = 34 ]; then
+	pass "releases: Jump and Back are the 3DO's only (36 buttons there, 34 elsewhere)"
+else
+	fail "releases: active buttons 3DO $(value "$work/rel-3do/n" activeButtons), 15th $(value "$work/rel-15th/n" activeButtons)"
+fi
+mkdir -p "$work/rel-win31-nosf"
+cp "$work/rel-win31/game.zip" "$work/rel-win31-nosf/"
+digest_run native "$work/rel-win31-nosf" 100 "$movie" > "$work/rel-win31-nosf/n"
+grep -v '^audioHash=' "$work/rel-win31/n.d" > "$work/sf.a"
+digests "$work/rel-win31-nosf/n" | grep -v '^audioHash=' > "$work/sf.b"
+if cmp -s "$work/sf.a" "$work/sf.b" && [ "$(value "$work/rel-win31/n" audioHash)" != "$(value "$work/rel-win31-nosf/n" audioHash)" ]; then
+	pass "releases (win31): without a SoundFont the MIDI music is silent, and nothing else changes"
+else
+	fail "releases (win31): the SoundFont changed more than the sound, or nothing"
+fi
+
 echo "== settings"
 mkgame seed
 printf '{"randomSeed": 200, "language": "fr"}' > "$work/seed/settings"
@@ -120,6 +173,37 @@ for build in native wbx; do
 		pass "settings ($build): defaults give seed 0 and the English title (0x81), randomSeed 200 + fr give 200 and the French (1)"
 	else
 		fail "settings ($build): seed/title $s0 (want 0 129), $s1 (want 200 1)"
+	fi
+	# the 20th Anniversary Edition's difficulty (0xBF) and remastered sound
+	# (0xDE), as rawgl's restartAt hands them to the script
+	for opt in easy:0:1 normal:1:1 hard:2:0; do
+		diff_name=${opt%%:*}; rest=${opt#*:}; want_d=${rest%%:*}; want_r=${rest#*:}
+		sd="$work/rel20-$diff_name"
+		mkdir -p "$sd"
+		cp "$work/rel-20th/game.zip" "$sd/"
+		remaster=true; [ $want_r = 0 ] && remaster=false
+		printf '{"difficulty": "%s", "remasteredAudio": %s}' $diff_name $remaster > "$sd/settings"
+		$run "$sd" --frames 2 --trace "$sd/t.$build" --trace-props "Var[191],Var[222]" > /dev/null 2>&1
+		got="$(last "$sd/t.$build" 1) $(last "$sd/t.$build" 2)"
+		if [ "$got" = "$want_d $want_r" ]; then
+			pass "settings ($build): 20th, difficulty $diff_name remasteredAudio $remaster - the script's 0xBF $want_d, 0xDE $want_r"
+		else
+			fail "settings ($build): 20th, difficulty $diff_name remasteredAudio $remaster - got $got, want $want_d $want_r"
+		fi
+	done
+done
+# remasteredAudio picks the anniversary editions' sound files: the 15th's
+# rmsnd/ and Music/AW/RmSnd/, the 20th's game/WGZ/original and game/OGG/original
+for rel in 15th 20th; do
+	sd="$work/rel-$rel-orig"
+	mkdir -p "$sd"
+	cp "$work/rel-$rel/game.zip" "$sd/"
+	printf '{"remasteredAudio": false}' > "$sd/settings"
+	digest_run native "$sd" 90 "$here/tests/synthetic-nth.movie" > "$sd/n"
+	if [ "$(value "$sd/n" audioHash)" != "$(value "$work/rel-$rel/n" audioHash)" ] && [ "$(value "$sd/n" videoHash)" = "$(value "$work/rel-$rel/n" videoHash)" ]; then
+		pass "settings: $rel, remasteredAudio false plays the original sounds (another sound, the same pictures)"
+	else
+		fail "settings: $rel, remasteredAudio false"
 	fi
 done
 
@@ -140,7 +224,7 @@ refuse() { # refuse <dir> <expected text> <what>
 		fail "refusals: $3 - $(echo "$out" | sed -n 's/^loadError=//p')"
 	fi
 }
-mkdir -p "$work/empty" "$work/notzip" "$work/nodata" "$work/unknown" "$work/nth" "$work/badseed"
+mkdir -p "$work/empty" "$work/notzip" "$work/nodata" "$work/unknown" "$work/badpak" "$work/badseed"
 refuse empty "needs the game's files" "no zip"
 echo "not a zip" > "$work/notzip/game.zip"
 refuse notzip "is not a zip file" "not a zip"
@@ -151,15 +235,12 @@ with zipfile.ZipFile(w + "/nodata/game.zip", "w") as z:
     z.writestr("readme.txt", "nothing")
 with zipfile.ZipFile(w + "/unknown/game.zip", "w") as z:
     z.writestr("aw/BANK01", b"\0" * 1000)        # no release rawgl knows is 1000 bytes
-src = zipfile.ZipFile(w + "/synth/game.zip")
-with zipfile.ZipFile(w + "/nth/game.zip", "w") as z:
-    for n in src.namelist():
-        z.writestr(n, src.read(n))
-    z.writestr("SYNTH/Data/Pak01.pak", b"\0" * 16)
+with zipfile.ZipFile(w + "/badpak/game.zip", "w") as z:
+    z.writestr("AW15/Data/Pak01.pak", b"\0" * 16)   # not a PACK
 PY
 refuse nodata "holds no Another World data" "no game in the zip"
 refuse unknown "No data files found" "a BANK01 of no known release (rawgl's own error, at Init)"
-refuse nth "15th Anniversary Edition" "the 15th Anniversary Edition's files"
+refuse badpak "No data files found" "a 15th Anniversary Edition's Pak01.pak that is not one (rawgl's own error, at Init)"
 cp "$work/synth/game.zip" "$work/badseed/game.zip"
 printf '{"randomSeed": 70000}' > "$work/badseed/settings"
 refuse badseed "goes from 0 to 65535" "randomSeed 70000"

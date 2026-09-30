@@ -1,56 +1,79 @@
 diff --git a/file.cpp b/file.cpp
-index 393e30d..d33be1c 100644
+index 393e30d..1374a2a 100644
 --- a/file.cpp
 +++ b/file.cpp
-@@ -74,8 +74,66 @@ struct stdFile : File_impl {
+@@ -74,8 +74,89 @@ struct stdFile : File_impl {
  	}
  };
  
 +#ifdef RAWGL_MEMFS
-+/* RAWGL_MEMFS: every file is served out of memory by whoever links the engine
-+ * (a Chimera core has its files mounted by name and no directories), through
-+ * rawgl_memfs_find(): the file's bytes by its path as the engine asks for it
-+ * ("<datapath>/<name>"), matched as the host sees fit (case, folders). Nothing
-+ * is ever written. */
++/* RAWGL_MEMFS: every file is served by whoever links the engine (a Chimera
++ * core has its files mounted by name and no directories), by the path the
++ * engine asks for ("<datapath>/<name>"), matched as the host sees fit (case,
++ * folders): out of memory (rawgl_memfs_find), or, for a file too large to
++ * copy (a disc image), read in place by position (rawgl_memfs_host_read), so
++ * that nothing of the host - no open handle, no file position - is part of
++ * the engine's state between two calls. Nothing is ever written. */
 +extern "C" const uint8_t *rawgl_memfs_find(const char *path, uint32_t *size);
++extern "C" int rawgl_memfs_host(const char *path, uint32_t *size);
++extern "C" uint32_t rawgl_memfs_host_read(int id, uint32_t pos, void *ptr, uint32_t len);
 +
 +struct memFile : File_impl {
 +	const uint8_t *_data;
++	int _host;
 +	uint32_t _size, _pos;
-+	memFile() : _data(0), _size(0), _pos(0) {}
++	memFile() : _data(0), _host(-1), _size(0), _pos(0) {}
 +	bool open(const char *path, const char *mode) {
 +		_ioErr = false;
 +		_data = 0;
++		_host = -1;
 +		_size = _pos = 0;
 +		if (mode[0] != 'r') {
 +			return false;
 +		}
 +		_data = rawgl_memfs_find(path, &_size);
-+		return (_data != 0);
++		if (!_data) {
++			_host = rawgl_memfs_host(path, &_size);
++		}
++		return (_data != 0 || _host >= 0);
++	}
++	bool isOpen() const {
++		return _data != 0 || _host >= 0;
 +	}
 +	void close() {
 +		_data = 0;
++		_host = -1;
 +		_size = _pos = 0;
 +	}
 +	uint32_t size() {
-+		return _data ? _size : 0;
++		return isOpen() ? _size : 0;
 +	}
 +	void seek(int off, int whence) {
-+		if (_data) {
++		if (isOpen()) {
 +			long pos = (whence == SEEK_CUR) ? (long)_pos + off : (whence == SEEK_END) ? (long)_size + off : off;
 +			_pos = (pos < 0) ? 0 : (pos > (long)_size) ? _size : (uint32_t)pos;
 +		}
 +	}
 +	int read(void *ptr, uint32_t len) {
-+		if (_data) {
++		if (isOpen()) {
 +			uint32_t r = (len > _size - _pos) ? _size - _pos : len;
-+			memcpy(ptr, _data + _pos, r);
++			if (_data) {
++				memcpy(ptr, _data + _pos, r);
++			} else {
++				r = rawgl_memfs_host_read(_host, _pos, ptr, r);
++			}
 +			_pos += r;
 +			if (r != len) {
++				/* what a read past the end leaves is zeros, not what the
++				 * caller's buffer held before (File::readByte's is not
++				 * initialised, and the 3DO's song player reads 8 bytes past
++				 * each song at every loop) */
++				memset((uint8_t *)ptr + r, 0, len - r);
 +				_ioErr = true;
 +			}
 +			return r;
 +		}
++		memset(ptr, 0, len);
 +		return 0;
 +	}
 +	int write(void *ptr, uint32_t len) {
@@ -69,7 +92,7 @@ index 393e30d..d33be1c 100644
  }
  
  File::~File() {
-@@ -88,6 +146,7 @@ bool File::open(const char *filepath) {
+@@ -88,6 +169,7 @@ bool File::open(const char *filepath) {
  	return _impl->open(filepath, "rb");
  }
  
@@ -77,7 +100,7 @@ index 393e30d..d33be1c 100644
  static bool getFilePathNoCase(const char *filename, const char *path, char *out) {
  	bool ret = false;
  	DIR *d = opendir(path);
-@@ -107,14 +166,20 @@ static bool getFilePathNoCase(const char *filename, const char *path, char *out)
+@@ -107,14 +189,20 @@ static bool getFilePathNoCase(const char *filename, const char *path, char *out)
  	}
  	return ret;
  }
@@ -98,3 +121,22 @@ index 393e30d..d33be1c 100644
  }
  
  bool File::openForWriting(const char *filepath) {
+diff --git a/file.h b/file.h
+index cb0d96f..2090ca8 100644
+--- a/file.h
++++ b/file.h
+@@ -10,6 +10,14 @@
+ #include <stdio.h>
+ #include <stdint.h>
+ 
++#ifdef RAWGL_MEMFS
++/* RAWGL_MEMFS (file.cpp): the files are the host's, and so are the questions
++ * about them - whether a folder is there, whether a file is (stat) */
++#include <sys/stat.h>
++extern "C" int rawgl_memfs_stat(const char *path, struct stat *st);
++#define stat(path, st) rawgl_memfs_stat(path, st)
++#endif
++
+ struct File_impl;
+ 
+ struct File {

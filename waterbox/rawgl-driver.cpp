@@ -3,8 +3,8 @@
  * rawgl runs Another World as the original program did: a loop that reads the
  * joystick, runs the game's 64 script tasks, and, when a task shows a frame,
  * sleeps what is left of the frame's length (VAR_PAUSE_SLICES fiftieths of a
- * second) before putting it on the screen; its pause is a loop that sleeps
- * until P comes again. The core keeps all of that and runs it on a stack of
+ * second, sixtieths on the 3DO) before putting it on the screen; its pause,
+ * and the 3DO's logos, title and menus, are loops that sleep until a key. The core keeps all of that and runs it on a stack of
  * its own (coro.c), with the platform (rawgl's SystemStub) answered here:
  *
  *   - Time is the machine's: getTimeStamp() is a counter that only a sleep
@@ -14,17 +14,18 @@
  *     the machine and not to the wall clock.
  *   - A step is one frame of the game: it ends when the frame is put on the
  *     screen (updateScreen). Where time passes without a frame - the pause,
- *     each 50 ms of it - the step ends when the game next reads its controls.
+ *     each 50 ms of it - the step ends when the game reads its controls again.
  *     A step that goes on for a second of the machine's time without either is
  *     cut there, which bounds its sound.
- *   - The controls are read where the engine reads them (processEvents): the
- *     buttons held are the keys held, and a button pressed on a step is that
- *     key typed once (Code, Pause, the password's letters).
+ *   - The controls arrive where the engine reads them (processEvents), as SDL
+ *     events: a button pressed is a key going down, let go a key coming up
+ *     (apply_input).
  *
  * The engine is upstream's, built from source with two patches (a file layer
- * served from memory, and a hook for a fatal error), its SDL_mixer mixer
- * compiled as it is against the core's device (compat/, sdl-shim.cpp), its
- * software renderer for the picture, and none of its SDL or OpenGL frontend.
+ * served by the core, and a hook for a fatal error), its mixer compiled as it
+ * is against the core's SDL_mixer (compat/, sdl-shim.cpp), its software
+ * renderer for the picture, and none of its SDL or OpenGL frontend. Every
+ * release rawgl plays is played here.
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -39,6 +40,7 @@
 #include "util.h"
 
 #include "coro.h"
+#include "midi.h"
 #include "rawgl-audio.h"
 #include "rawgl-driver.h"
 #include "rawgl-files.h"
@@ -74,8 +76,9 @@ struct Driver
 	int init_done, halted;
 	char error[512];
 
-	/* the buttons: held now, held on the step before, pressed on this step */
-	uint8_t held[RAWGL_BTN_COUNT], prev[RAWGL_BTN_COUNT], pressed[RAWGL_BTN_COUNT];
+	/* the buttons: held now, held on the step before, pressed and let go on
+	 * this step (delivered at its first read of the controls) */
+	uint8_t held[RAWGL_BTN_COUNT], prev[RAWGL_BTN_COUNT], pressed[RAWGL_BTN_COUNT], released[RAWGL_BTN_COUNT];
 
 	/* the step */
 	uint64_t clock_ms;      /* the machine's time */
@@ -85,7 +88,9 @@ struct Driver
 
 	int16_t audio[RAWGL_AUDIO_MAX_SAMPLES * 2];
 	int audio_frames;
-	uint32_t video[RAWGL_VIDEO_WIDTH * RAWGL_VIDEO_HEIGHT];
+	uint32_t video[RAWGL_VIDEO_MAX_WIDTH * RAWGL_VIDEO_MAX_HEIGHT];
+	int video_w, video_h;
+	Resource::DataType release;
 };
 
 Driver g;
@@ -127,19 +132,37 @@ void advance(uint32_t ms)
 	}
 }
 
+/* The controls as rawgl's SDL frontend delivers them: events. A key going
+ * down sets its flag, a key coming up clears it, and nothing else touches
+ * it - so where the game consumes a press by clearing the flag itself (the
+ * 3DO's logos, title and menus, the pause), a key still held is not pressed
+ * again until it is let go and pressed anew, as upstream. A step's changes
+ * arrive where it first reads the controls; a key pressed and released
+ * between two steps does not exist, since a step sees only what is held. */
 void apply_input(PlayerInput &pi)
 {
-	pi.dirMask = (g.held[RAWGL_BTN_UP] ? PlayerInput::DIR_UP : 0) | (g.held[RAWGL_BTN_DOWN] ? PlayerInput::DIR_DOWN : 0)
-		| (g.held[RAWGL_BTN_LEFT] ? PlayerInput::DIR_LEFT : 0) | (g.held[RAWGL_BTN_RIGHT] ? PlayerInput::DIR_RIGHT : 0);
-	pi.action = g.held[RAWGL_BTN_ACTION] != 0;
-	pi.jump = false;
-	/* a key typed: once, where the step first reads the controls */
+	static const struct { int btn; uint8_t dir; } dirs[] = {
+		{ RAWGL_BTN_UP, PlayerInput::DIR_UP }, { RAWGL_BTN_DOWN, PlayerInput::DIR_DOWN },
+		{ RAWGL_BTN_LEFT, PlayerInput::DIR_LEFT }, { RAWGL_BTN_RIGHT, PlayerInput::DIR_RIGHT },
+	};
+	for (const auto &d : dirs)
+	{
+		if (g.pressed[d.btn]) pi.dirMask |= d.dir;
+		if (g.released[d.btn]) pi.dirMask &= (uint8_t)~d.dir;
+	}
+	if (g.pressed[RAWGL_BTN_ACTION]) pi.action = true;
+	if (g.released[RAWGL_BTN_ACTION]) pi.action = false;
+	if (g.pressed[RAWGL_BTN_JUMP]) pi.jump = true;
+	if (g.released[RAWGL_BTN_JUMP]) pi.jump = false;
+	/* a key typed: once */
 	if (g.pressed[RAWGL_BTN_CODE]) pi.code = true;
 	if (g.pressed[RAWGL_BTN_PAUSE]) pi.pause = true;
+	if (g.pressed[RAWGL_BTN_BACK]) pi.back = true;
 	for (int i = 0; i < 26; i++)
 		if (g.pressed[RAWGL_BTN_LETTER_A + i]) pi.lastChar = (char)('a' + i);
 	if (g.pressed[RAWGL_BTN_BACKSPACE]) pi.lastChar = 8;
 	memset(g.pressed, 0, sizeof g.pressed);
+	memset(g.released, 0, sizeof g.released);
 }
 
 /* ------------------------------------------------------------ the platform */
@@ -152,25 +175,36 @@ void ChimeraStub::prepareScreen(int &w, int &h, float ar[4])
 	ar[2] = ar[3] = 1.f;
 }
 
+/* the game's page, or a full-screen picture of the 3DO's or Windows 3.1's
+ * at its own size (cut to 640x480); the size is kept whether drawn or not */
 void ChimeraStub::setScreenPixels555(const uint16_t *data, int w, int h)
 {
-	if (!g.render || w != RAWGL_VIDEO_WIDTH || h != RAWGL_VIDEO_HEIGHT) return;
-	for (int i = 0; i < w * h; i++)
-	{
-		const uint16_t c = data[i];
-		const uint32_t r = (c >> 10) & 31, gr = (c >> 5) & 31, b = c & 31;
-		g.video[i] = 0xFF000000u | ((r << 3 | r >> 2) << 16) | ((gr << 3 | gr >> 2) << 8) | (b << 3 | b >> 2);
-	}
+	const int cw = w < RAWGL_VIDEO_MAX_WIDTH ? w : RAWGL_VIDEO_MAX_WIDTH;
+	const int ch = h < RAWGL_VIDEO_MAX_HEIGHT ? h : RAWGL_VIDEO_MAX_HEIGHT;
+	if (cw <= 0 || ch <= 0) return;
+	g.video_w = cw;
+	g.video_h = ch;
+	if (!g.render) return;
+	for (int y = 0; y < ch; y++)
+		for (int x = 0; x < cw; x++)
+		{
+			const uint16_t c = data[y * w + x];
+			const uint32_t r = (c >> 10) & 31, gr = (c >> 5) & 31, b = c & 31;
+			g.video[y * cw + x] = 0xFF000000u | ((r << 3 | r >> 2) << 16) | ((gr << 3 | gr >> 2) << 8) | (b << 3 | b >> 2);
+		}
 }
 
 void ChimeraStub::updateScreen() { end_step(); }
 
 void ChimeraStub::processEvents()
 {
-	/* time passed with nothing shown (the pause): that was a step, and the
-	 * controls now read belong to the next; so does a loop that keeps
-	 * reading without time passing, after 64 reads */
-	if (g.step_ms > 0 || g.polls >= 64)
+	/* the controls read again after time passed with nothing shown (the
+	 * pause, the 3DO's logos): that was a step, and what is read now belongs
+	 * to the next; so does a loop that keeps reading without time passing,
+	 * after 64 reads. A loop that waits BEFORE it reads and then shows its
+	 * frame (the 3DO's title) is one step a frame: its first read is not a
+	 * second one. */
+	if (g.read && (g.step_ms > 0 || g.polls >= 64))
 		end_step();
 	g.read = 1;
 	g.polls++;
@@ -208,27 +242,35 @@ void halt(const char *msg)
 
 void game_main()
 {
-	/* rawgl's main(), as the core runs it: the data path is "." (the files are
-	 * the zip's, patches/0001), the original renderer, the game from its
-	 * start - which on the DOS, Amiga and Atari releases is the copy
-	 * protection's symbols, as upstream builds it without BYPASS_PROTECTION */
-	g.engine = new Engine(".", kPartIntro);
+	/* rawgl's main(), as the core runs it: the data path is the project's
+	 * folder, or its 3DO disc (the files are the zip's, patches/0001), the
+	 * game from its start - which on the DOS, Amiga, Atari ST and Windows 3.1
+	 * releases is the copy protection's symbols, as upstream builds it without
+	 * BYPASS_PROTECTION - and rawgl's options from the settings (the 20th
+	 * Anniversary Edition's difficulty, the anniversary editions' sound) */
+	Script::_difficulty = (Difficulty)g.settings.difficulty;
+	Script::_useRemasteredAudio = g.settings.remastered_audio != 0;
+	g.engine = new Engine(rawgl_files_data_dir(), kPartIntro);
 	const Resource::DataType type = g.engine->_res.getDataType();
-	switch (type)
+	g.release = type;
+	/* the renderer: rawgl's software one, as its "original" renderer for the
+	 * 1991 releases and the anniversary editions (which draws their 320x200
+	 * pictures and the game's polygons; their HD pictures are its OpenGL
+	 * renderer's), and in 15-bit colour for the 3DO, as rawgl picks for it */
+	Graphics::_use555 = (type == Resource::DT_3DO);
+	Graphics::_is1991 = (type != Resource::DT_3DO);
+	/* Windows 3.1's MIDI music: the project's SoundFont, loaded now (at Init,
+	 * so its samples can be sealed) */
+	if (type == Resource::DT_WIN31)
 	{
-	case Resource::DT_DOS:
-	case Resource::DT_AMIGA:
-	case Resource::DT_ATARI:
-	case Resource::DT_ATARI_DEMO:
-		break;
-	default:
-	{
-		char msg[256];
-		snprintf(msg, sizeof msg, "These are the %s's files: the core plays the DOS, Amiga and Atari ST releases", release_name(type));
-		halt(msg);
+		FILE *sf2 = rawgl_files_soundfont();
+		if (sf2)
+		{
+			const int ok = midi_load_soundfont(sf2);
+			fclose(sf2);
+			if (!ok) halt("the project's SoundFont could not be read (a .sf2 file)");
+		}
 	}
-	}
-	Graphics::_is1991 = true;
 	g.graphics = GraphicsSoft_create();
 	g.engine->setSystemStub(&g.stub, g.graphics);
 	g.engine->setup((Language)g.settings.language, GRAPHICS_ORIGINAL, "", 1, false);
@@ -243,13 +285,26 @@ void game_main()
  * message (and so does a failed assertion, halt.c) */
 extern "C" void rawgl_error_hook(const char *msg) { halt(msg); }
 
-/* the engine's clock reading at start (the script's random seed) is the
- * project's setting (the link wraps time()) */
+/* the engine's clock reading at start (the script's random seed, and the 20th
+ * Anniversary Edition's srand) is the project's setting (the link wraps
+ * time()) */
 extern "C" time_t __wrap_time(time_t *t)
 {
 	const time_t v = (time_t)g.settings.random_seed;
 	if (t) *t = v;
 	return v;
+}
+
+/* the 20th Anniversary Edition picks among its sound variants with rand():
+ * musl's generator (the link wraps rand and srand), so the native reference
+ * - glibc's rand is another sequence - draws the same numbers as the sandbox,
+ * and its state is guest memory, which a savestate carries */
+static uint64_t g_rand_seed;
+extern "C" void __wrap_srand(unsigned s) { g_rand_seed = s - 1; }
+extern "C" int __wrap_rand(void)
+{
+	g_rand_seed = 6364136223846793005ULL * g_rand_seed + 1;
+	return (int)(g_rand_seed >> 33);
 }
 
 /* ------------------------------------------------------------ the exports */
@@ -259,7 +314,9 @@ extern "C" {
 int rawgldrv_init(char *err, int errsize)
 {
 	memset(&g.held, 0, sizeof g.held);
-	for (int i = 0; i < RAWGL_VIDEO_WIDTH * RAWGL_VIDEO_HEIGHT; i++) g.video[i] = 0xFF000000u;
+	for (int i = 0; i < RAWGL_VIDEO_MAX_WIDTH * RAWGL_VIDEO_MAX_HEIGHT; i++) g.video[i] = 0xFF000000u;
+	g.video_w = RAWGL_VIDEO_WIDTH;
+	g.video_h = RAWGL_VIDEO_HEIGHT;
 	rawgl_settings_read(&g.settings);
 	if (g.settings.random_seed < 0 || g.settings.random_seed > 65535)
 	{
@@ -295,6 +352,7 @@ void rawgldrv_frame(int render)
 	for (int i = 0; i < RAWGL_BTN_COUNT; i++)
 	{
 		g.pressed[i] = g.held[i] && !g.prev[i];
+		g.released[i] = !g.held[i] && g.prev[i];
 		g.prev[i] = g.held[i];
 	}
 	g.step_ms = 0;
@@ -310,7 +368,18 @@ void rawgldrv_frame(int render)
 	gamestate_from_game();
 }
 
-const uint32_t *rawgldrv_video(void) { return g.video; }
+const uint32_t *rawgldrv_video(int *w, int *h)
+{
+	*w = g.video_w;
+	*h = g.video_h;
+	return g.video;
+}
+
+int rawgldrv_button_active(int index)
+{
+	if (index == RAWGL_BTN_JUMP || index == RAWGL_BTN_BACK) return g.release == Resource::DT_3DO;
+	return index >= 0 && index < RAWGL_BTN_COUNT;
+}
 
 const int16_t *rawgldrv_audio(int *samples)
 {
@@ -437,8 +506,10 @@ const char *rawgldrv_game_properties(void)
 	  "\"description\": \"The part the game goes to at its next frame (0: none)\" },\n");
 	P("    { \"name\": \"Game.Screen\", \"domain\": \"Game State\", \"offset\": 4, \"type\": \"s16\", \"group\": \"Game\", \"writable\": false, "
 	  "\"description\": \"The screen the script last loaded\" },\n");
-	P("    { \"name\": \"Game.Release\", \"domain\": \"Game State\", \"offset\": 6, \"type\": \"u8\", \"group\": \"Game\", \"writable\": false, "
-	  "\"values\": { \"0\": \"DOS\", \"1\": \"Amiga\", \"2\": \"Atari ST\", \"7\": \"Atari ST demo\" } },\n");
+	P("    { \"name\": \"Game.Release\", \"domain\": \"Game State\", \"offset\": 6, \"type\": \"u8\", \"group\": \"Game\", \"writable\": false, \"values\": {");
+	for (int t = Resource::DT_DOS; t <= Resource::DT_ATARI_DEMO; t++)
+		P("%s \"%d\": \"%s\"", t ? "," : "", t, release_name((Resource::DataType)t));
+	P(" } },\n");
 	P("    { \"name\": \"Game.Language\", \"domain\": \"Game State\", \"offset\": 7, \"type\": \"u8\", \"group\": \"Game\", \"writable\": false, "
 	  "\"values\": { \"0\": \"French\", \"1\": \"English\", \"2\": \"German\", \"3\": \"Spanish\", \"4\": \"Italian\" } },\n");
 	P("    { \"name\": \"Machine.Steps\", \"domain\": \"Game State\", \"offset\": 8, \"type\": \"u64\", \"group\": \"Machine\", \"writable\": false },\n");

@@ -6,9 +6,10 @@
  * core's clock, and every memory domain.
  *
  * Input is a movie: one line per step, the buttons held on that step as
- * characters (gate_key_index: U D L R the joystick, A its fire button, C Code,
- * P Pause, a..z the password screen's letters, < Backspace; anything else
- * ignored); a line starting with # is a comment. --movie-at puts its first
+ * characters (gate_key_index: U D L R the joystick, A its fire button, J the
+ * 3DO's jump, C Code, P Pause, E the 3DO's Back, a..z the password screen's
+ * letters, < Backspace; anything else ignored); a line starting with # is a
+ * comment. --movie-at puts its first
  * line at a given step; --press adds a key held for a stretch of steps.
  *
  * Properties are reached the way the frontend reaches them: through the table
@@ -101,6 +102,8 @@ static int gate_key_index(char c)
 	case 'L': return RAWGL_BTN_LEFT;
 	case 'R': return RAWGL_BTN_RIGHT;
 	case 'A': return RAWGL_BTN_ACTION;
+	case 'J': return RAWGL_BTN_JUMP;
+	case 'E': return RAWGL_BTN_BACK;
 	case 'C': return RAWGL_BTN_CODE;
 	case 'P': return RAWGL_BTN_PAUSE;
 	case '<': return RAWGL_BTN_BACKSPACE;

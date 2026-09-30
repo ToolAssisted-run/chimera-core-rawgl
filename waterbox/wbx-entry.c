@@ -31,6 +31,10 @@ ECL_EXPORT int Init(void)
 	return rawgldrv_init(g_load_error, (int)sizeof g_load_error);
 }
 
+/* Jump and Back are the 3DO's: the frontend asks after Init and hides them
+ * for the other releases */
+ECL_EXPORT int IsButtonActive(int32_t index) { return rawgldrv_button_active(index); }
+
 ECL_EXPORT void SetButton(int32_t index, int32_t state)
 {
 	if (index >= 0 && index < RAWGL_BTN_COUNT) g_set_buttons[index] = state ? 1 : 0;
@@ -45,9 +49,25 @@ ECL_EXPORT void FrameAdvance(uint64_t packed)
 
 ECL_EXPORT void SetRenderingEnabled(int on) { chimera_render_enabled = on != 0; }
 
-ECL_EXPORT uint32_t *GetVideoBgra(void) { return (uint32_t *)rawgldrv_video(); }
-ECL_EXPORT int GetVideoWidth(void) { return RAWGL_VIDEO_WIDTH; }
-ECL_EXPORT int GetVideoHeight(void) { return RAWGL_VIDEO_HEIGHT; }
+/* the live size: the game's 320x200, or the 3DO's and Windows 3.1's
+ * full-screen pictures at theirs (waterbox.config gives the capacity) */
+ECL_EXPORT uint32_t *GetVideoBgra(void)
+{
+	int w, h;
+	return (uint32_t *)rawgldrv_video(&w, &h);
+}
+ECL_EXPORT int GetVideoWidth(void)
+{
+	int w, h;
+	rawgldrv_video(&w, &h);
+	return w;
+}
+ECL_EXPORT int GetVideoHeight(void)
+{
+	int w, h;
+	rawgldrv_video(&w, &h);
+	return h;
+}
 /* 320x200 on a 4:3 monitor, as on the Amiga, the ST and the PC */
 ECL_EXPORT int GetDisplayAspectX(void) { return 4; }
 ECL_EXPORT int GetDisplayAspectY(void) { return 3; }

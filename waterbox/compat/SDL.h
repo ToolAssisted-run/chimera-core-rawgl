@@ -1,9 +1,9 @@
 /* SDL.h - what rawgl's mixer.cpp asks of SDL, for a core that has no SDL.
  *
  * mixer.cpp is compiled as upstream wrote it; the audio device it opens is
- * the core's: nothing plays on its own, and the core calls the hook the mixer
- * registered for exactly the samples each step of the machine's time covers
- * (sdl-shim.cpp). There is no audio thread, so the locks are nothing. */
+ * the core's: nothing plays on its own, and the core mixes exactly the samples
+ * each step of the machine's time covers (sdl-shim.cpp). There is no audio
+ * thread, so the locks are nothing. */
 #ifndef RAWGL_CORE_SDL_H
 #define RAWGL_CORE_SDL_H
 
