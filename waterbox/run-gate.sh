@@ -14,8 +14,8 @@
 #                Windows 3.1 and the 3DO (its folder, its disc image read in
 #                place, and the disc as a CHD): native = sandbox, rerecord,
 #                session, each; the 3DO's folder, image and CHD the same
-#                machine; Jump the 3DO's only; the SoundFont changes Windows 3.1's sound and
-#                nothing else
+#                machine; Jump the 3DO's only; the soundFont setting (with the
+#                SoundFont firmware) changes Windows 3.1's sound and nothing else
 #   disks        the synthetic DOS game on floppy images the core reads as they
 #                are - a DOS .img, two Amiga .adf, two Atari ST .st, .msa and
 #                .stx (a protected track and all), a zip of the two .adf -
@@ -36,8 +36,9 @@
 #   refusals     no zip, not a zip, no game in it, data rawgl cannot tell, a
 #                15th Anniversary Edition's Pak01.pak that is not one, a seed
 #                out of range, an installer (NSIS, loose; Inno Setup, in a
-#                zip), a PC CD (.iso, .chd): each says why - the installers
-#                and the PC CD naming the files to add instead
+#                zip), a PC CD (.iso, .chd), the soundFont setting without its
+#                firmware or with a file that is not a SoundFont: each says why
+#                - the installers and the PC CD naming the files to add instead
 #   halts        rawgl's error() and a failed assertion halt the machine, which
 #                keeps stepping; the same in both builds
 #   clock        the guest has no time() of its own: the one it calls is the
@@ -52,7 +53,8 @@
 #   -g adds the equivalence, rerecord and session legs on a real release (the
 #      zip of the game's folder, its disks' images - -g once for each - or the
 #      3DO's disc, .iso or .chd, as a project would bring them, and a
-#      SoundFont (.sf2) for Windows 3.1's music;
+#      SoundFont (.sf2) for Windows 3.1's music (the firmware, with the
+#      soundFont setting);
 #      not in the repo): 2000 steps from power-on, or the steps of the movie -M
 #      names (a movie of your own, kept out of the repo)
 #   -c runs the engine leg with that chimera-run (build/dll/chimera-run of a
@@ -161,7 +163,10 @@ for rel in 15th 20th win31 3do 3do-iso 3do-chd; do
 		3do-chd) python3 "$here/tests/make-synthetic.py" --release $rel "$d/game.chd" ;;
 		*) python3 "$here/tests/make-synthetic.py" --release $rel "$d/game.zip" ;;
 	esac
-	[ $rel = win31 ] && cp "$root/extern/TinySoundFont/examples/florestan-subset.sf2" "$d/soundfont.sf2"
+	if [ $rel = win31 ]; then
+		cp "$root/extern/TinySoundFont/examples/florestan-subset.sf2" "$d/soundfont.sf2"
+		printf '{"soundFont": true}' > "$d/settings"
+	fi
 	digest_run native "$d" $n "$m" --trace "$d/t" --trace-props "Game.Release,Game.Part" > "$d/n"
 	digest_run wbx "$d" $n "$m" > "$d/w"
 	digest_run wbx "$d" $n "$m" --rerecord > "$d/r"
@@ -179,13 +184,15 @@ if [ "$(value "$work/rel-3do/n" activeButtons)" = 35 ] && [ "$(value "$work/rel-
 else
 	fail "releases: active buttons 3DO $(value "$work/rel-3do/n" activeButtons), 15th $(value "$work/rel-15th/n" activeButtons)"
 fi
+# the soundFont setting off: the firmware beside the game is not used, the
+# music is silent, and nothing else changes
 mkdir -p "$work/rel-win31-nosf"
-cp "$work/rel-win31/game.zip" "$work/rel-win31-nosf/"
+cp "$work/rel-win31/game.zip" "$work/rel-win31/soundfont.sf2" "$work/rel-win31-nosf/"
 digest_run native "$work/rel-win31-nosf" 100 "$movie" > "$work/rel-win31-nosf/n"
 grep -v '^audioHash=' "$work/rel-win31/n.d" > "$work/sf.a"
 digests "$work/rel-win31-nosf/n" | grep -v '^audioHash=' > "$work/sf.b"
 if cmp -s "$work/sf.a" "$work/sf.b" && [ "$(value "$work/rel-win31/n" audioHash)" != "$(value "$work/rel-win31-nosf/n" audioHash)" ]; then
-	pass "releases (win31): without a SoundFont the MIDI music is silent, and nothing else changes"
+	pass "releases (win31): with the soundFont setting off the MIDI music is silent, and nothing else changes"
 else
 	fail "releases (win31): the SoundFont changed more than the sound, or nothing"
 fi
@@ -325,7 +332,12 @@ refuse() { # refuse <dir> <expected text> <what>
 	fi
 }
 mkdir -p "$work/empty" "$work/notzip" "$work/nodata" "$work/unknown" "$work/badpak" "$work/badseed" \
-	"$work/nsis" "$work/inno" "$work/pciso" "$work/pcchd"
+	"$work/nsis" "$work/inno" "$work/pciso" "$work/pcchd" "$work/sf-none" "$work/sf-bad"
+for sd in sf-none sf-bad; do
+	cp "$work/rel-win31/game.zip" "$work/$sd/"
+	printf '{"soundFont": true}' > "$work/$sd/settings"
+done
+echo "not a SoundFont" > "$work/sf-bad/soundfont.sf2"
 refuse empty "needs the game's own files" "no files"
 echo "not a zip" > "$work/notzip/game.zip"
 refuse notzip "is not a zip, a disk image" "not a zip, a disk image or a disc"
@@ -369,6 +381,8 @@ printf '{"randomSeed": 70000}' > "$work/badseed/settings"
 refuse badseed "goes from 0 to 65535" "randomSeed 70000"
 refuse mt32-none "CM32L_CONTROL.ROM is not there" "mt32 without the CM-32L's ROMs"
 refuse mt32-bad "is not a Roland ROM Munt knows" "mt32 with ROMs that are not"
+refuse sf-none "soundfont.sf2 is not there" "soundFont without the SoundFont"
+refuse sf-bad "soundfont.sf2 is not a SoundFont" "soundFont with a file that is not one"
 
 echo "== halts"
 for kind in opcode shape; do
@@ -426,22 +440,23 @@ if [ -n "$game" ]; then
 	echo "== Another World ($(echo "$game" | tr '\n' ' ')${game_movie:+, $game_movie})"
 	mkdir -p "$work/game"
 	# the files under their own names, and a slot map naming them, as a
-	# project mounts them: a SoundFont (.sf2) in the soundfont slot, the rest
-	# in the game slot
+	# project mounts them: a SoundFont (.sf2) as the firmware, with the
+	# soundFont setting; the rest in the game slot
 	slots='{"game": ['
 	sep=''
-	sf=''
-	echo "$game" | while IFS= read -r f; do cp "$f" "$work/game/$(basename "$f")"; done
 	while IFS= read -r f; do
 		case "$f" in
-			*.sf2|*.SF2) sf="$(basename "$f")" ;;
-			*) slots="$slots$sep\"$(basename "$f")\""; sep=', ' ;;
+			*.sf2|*.SF2)
+				cp "$f" "$work/game/soundfont.sf2"
+				printf '{"soundFont": true}' > "$work/game/settings" ;;
+			*)
+				cp "$f" "$work/game/$(basename "$f")"
+				slots="$slots$sep\"$(basename "$f")\""; sep=', ' ;;
 		esac
 	done <<GAMES
 $game
 GAMES
 	slots="$slots]"
-	[ -n "$sf" ] && slots="$slots, \"soundfont\": [\"$sf\"]"
 	printf '%s}' "$slots" > "$work/game/slots"
 	gn=2000
 	gm=""

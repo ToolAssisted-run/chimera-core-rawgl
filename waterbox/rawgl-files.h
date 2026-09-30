@@ -18,6 +18,7 @@ struct rawgl_settings
 	int difficulty;       /* the 20th Anniversary Edition's: 0 easy, 1 normal, 2 hard */
 	int remastered_audio; /* the anniversary editions' remastered sounds and music */
 	int mt32;             /* the DOS release's sound effects on a Roland CM-32L */
+	int soundfont;        /* Windows 3.1's MIDI music, with the SoundFont firmware */
 };
 
 void rawgl_settings_read(struct rawgl_settings *s);
@@ -27,7 +28,7 @@ int rawgl_files_load(char *err, int errsize);
 int rawgl_files_count(void);
 /* the engine's data path: "." for a folder, the image's name for a disc */
 const char *rawgl_files_data_dir(void);
-/* the project's SoundFont, open, or NULL without one */
+/* the SoundFont firmware (soundfont.sf2), open, or NULL when it is not there */
 FILE *rawgl_files_soundfont(void);
 
 /* patches/0001: the engine's opens, by the path it asks for */

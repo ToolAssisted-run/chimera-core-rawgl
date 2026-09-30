@@ -26,7 +26,7 @@ Started 2026-09-30, from the SDLPoP2 core's shape (the driver, the harnesses, th
 - **M6, savestates**: free - the engine's stack is guest memory (`coro.c`, MAP_STACK), the files are sealed.
   Rerecord (save and load before every step) and session (save while paused, new host, load) legs pass.
 - **M7, the package**: `waterbox.config`, keybinds, `file_slots.json`, licences; a deterministic package.
-- **The gate**: 77 legs on the synthetic game in every release's format and every container, including the
+- **The gate**: 79 legs on the synthetic game in every release's format and every container, including the
   package through chimera-run and (with `-r`) the CM-32L.
 
 ## The real DOS release (2026-09-30)
@@ -121,7 +121,7 @@ floppy's .img) are not taken: that would be a slot of several disks and a reader
   (168 MB) is not unpacked: the original renderer does not draw it.
 - **Windows 3.1**, "win3_OOTW3x.zip": the installed folder (BANK 0418F8B72B8FD224ADC94128E05FCC452CF05A6C,
   WORLD.EXE, X.MID, Y.MID) - a zip as it is. The copy protection's screen is the DOS one; its MIDI music needs
-  the soundfont slot (tested with FluidR3 GM, 148 MB: its samples are sealed, 296 MB as floats).
+  the SoundFont firmware (tested with FluidR3 GM, 148 MB: its samples are sealed, 296 MB as floats).
   TinySoundFont's cost: ~8-12 s of the machine's host time per minute of intro music, against ~1.3 s without.
 
 All three ran the same route as the others (the protection where there is one, the whole intro, the first level
@@ -165,6 +165,25 @@ screen. 3,907 steps: native == sandbox, rerecord, session; chimera-run with the 
 disc is also written as an (uncompressed) CHD, and the gate holds it to the same machine as the folder and the
 image.
 
+## The demos, real (2026-09-30)
+
+Sergio could not find them; both are on archive.org, and a demo is free to obtain.
+
+- **DOS demo**: Interplay's "Out of This World" demo (1992), `ootwdemo.zip`
+  (04A6D37000DC29DECC8D7BBA6E0AE52833751A24, archive.org item "OutOfThisWorldDemo"): the raw files, zipped -
+  MEMLIST.BIN (2,940 bytes), BANK01, 02, 05, 06, 0D, TABVOL.BIN, DEMO3.JOY, and the demo's own AWDEMO.EXE,
+  CONFIG.EXE, INSTALL.BAT (a batch file copying the files, not an installer packing them). The zip goes in as it
+  is. rawgl's DOS path without the password screen (`_hasPasswordScreen = false`; bank 0x0C's one resource is
+  missing, which rawgl skips); the intro and the first level. DEMO3.JOY is the demo's recorded play for
+  rawgl's `--demo3-joy`; the core does not play it (the player's inputs are the movie).
+- **Atari ST demo**: ST Action (UK) issue 44, December 1991, cover disk 28 (archive.org item
+  "ST_Action_UK_Magazine_Coverdisk_Disk_Image", `STAction_Issue44_1991-12_InteractivePublishing_Disk28of58_AtariST_Dump.7z`,
+  B22A7FA69A475CEEA1F6CA1D3AA22E95F41E593C: SCP flux dumps, an .st and a Pasti .stx). The disk is FAT12 with a
+  media byte of 0 (mtools refuses it; `disks.c` does not look at it): AUTO/MENU.PRG, AW.TOS
+  (DF30120BEC51C8589F13185D1E92C6B412DA74DE, 96,513 bytes), RODLAND.TOS, SIEGE.TOS. The .st
+  (03706F52AF59404E30278B2772FDDA5C4CD4743B) and the .stx (E9192C09383532EB24FED336B29381273AD1C5EF) are the
+  same machine. The rolling demo is the intro alone; after the accelerator's lightning its last picture holds.
+
 ## The other releases (2026-09-30)
 
 Sergio: support every release rawgl plays, the real files to come later. Done, each proven on the synthetic game
@@ -189,11 +208,13 @@ in its own format (native == sandbox, rerecord, session), none yet on real data:
   SDL_mixer mixes (music, channels, post-mix), resampled linearly in integers. stb_vorbis and TinySoundFont use
   sin, cos, exp, log and pow, whose last bits differ between glibc and musl: `detmath.h` gives them the core's
   own (+ - * / and exact operations only), within a few ulps of glibc and identical in both builds.
-- **Windows 3.1's MIDI** needs a SoundFont: an optional project slot ("soundfont", .sf2), loaded at Init with
+- **Windows 3.1's MIDI** needs a SoundFont: firmware `soundfont.sf2`, required when the user asks for it with
+  the soundFont setting (Sergio, 2026-09-30: "make it an optional firmware, if requested by the user"). No hash
+  is pinned - any General MIDI SoundFont is good, and the project records the one chosen. Loaded at Init with
   its samples (TinySoundFont's floats, twice the file) moved to sealed memory, so no savestate carries them.
-  Without one the MIDI music is silent, as rawgl without a MIDI synthesizer; the gate checks that is the only
-  difference (the MIDI music feeds nothing back to the script). A General MIDI SoundFont's hash could be
-  declared as firmware instead, once one is chosen.
+  With the setting off the MIDI music is silent, as rawgl without a MIDI synthesizer; the gate checks that is
+  the only difference (the MIDI music feeds nothing back to the script). The two MIDI files are plain General
+  MIDI: channels 1-10, GM programs, drums on 10, no sysex.
 - **The input is events now** (all releases): a button pressed is a key going down, let go a key coming up, and
   nothing else touches rawgl's flags - so where the game consumes a press by clearing its flag (the 3DO's logos,
   title and menus; the pause), a held button is not pressed again until let go, as with SDL. Before this a held

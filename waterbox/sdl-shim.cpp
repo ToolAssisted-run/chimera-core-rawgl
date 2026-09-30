@@ -12,7 +12,7 @@
  *   - 15th and 20th Anniversary Editions, Windows 3.1: a post-mix callback
  *     (Mix_SetPostMix), rawgl's WAV channels, and SDL_mixer's music: a WAV
  *     (15th), an Ogg Vorbis (20th, vorbis.c) or a MIDI file (Windows 3.1,
- *     midi.c, with the project's SoundFont).
+ *     midi.c, with the SoundFont firmware).
  *   - 3DO: SDL_mixer's channels playing AIFF sounds rawgl preloads
  *     (Mix_LoadWAV_RW, Mix_PlayChannel), and a music hook for its AIFF-C songs.
  *

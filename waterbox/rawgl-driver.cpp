@@ -262,17 +262,17 @@ void game_main()
 	 * renderer's), and in 15-bit colour for the 3DO, as rawgl picks for it */
 	Graphics::_use555 = (type == Resource::DT_3DO);
 	Graphics::_is1991 = (type != Resource::DT_3DO);
-	/* Windows 3.1's MIDI music: the project's SoundFont, loaded now (at Init,
-	 * so its samples can be sealed) */
-	if (type == Resource::DT_WIN31)
+	/* Windows 3.1's MIDI music: with the soundFont setting, the SoundFont the
+	 * project brings as firmware, loaded now (at Init, so its samples can be
+	 * sealed) - refused when it is not there or not one; without the setting,
+	 * no music, as rawgl without a MIDI synthesizer */
+	if (type == Resource::DT_WIN31 && g.settings.soundfont)
 	{
 		FILE *sf2 = rawgl_files_soundfont();
-		if (sf2)
-		{
-			const int ok = midi_load_soundfont(sf2);
-			fclose(sf2);
-			if (!ok) halt("the project's SoundFont could not be read (a .sf2 file)");
-		}
+		if (!sf2) halt("the SoundFont music needs a General MIDI SoundFont: soundfont.sf2 is not there");
+		const int ok = midi_load_soundfont(sf2);
+		fclose(sf2);
+		if (!ok) halt("soundfont.sf2 is not a SoundFont TinySoundFont can read (a .sf2 file)");
 	}
 	/* the DOS release's sound effects on a Roland CM-32L (rawgl's --mt32):
 	 * Munt, with the ROMs rawgl opens by name, which the project brings as

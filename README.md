@@ -44,13 +44,13 @@ the CM-32L is Munt's.
   | Release | The folder is recognised by | Starts at | Sound | Picture |
   |---|---|---|---|---|
   | DOS | MEMLIST.BIN + BANK01..BANK0D | the copy protection (the demo: the intro) | rawgl's 4 channels and module player; the effects on a CM-32L with the mt32 setting | original, 320x200 |
-  | DOS demo | MEMLIST.BIN + DEMO01.. | the intro | the same | the same |
+  | DOS demo | MEMLIST.BIN + BANK01, 02, 05, 06, 0D (or DEMO01..) | the intro, then the first level | the same | the same |
   | Amiga (French, English) | BANK01 of 244,674 / 244,868 bytes | the copy protection | the same | the same |
   | Atari ST | BANK01 of 227,142 bytes | the copy protection | the same | the same |
   | Atari ST demo | AW.TOS of 96,513 bytes | the intro | the same | the same |
   | 15th Anniversary Edition | Data/Pak01.pak | the intro | WAV sounds, WAV music (original or remastered) | original, 320x200 (see below) |
   | 20th Anniversary Edition | game/DAT/FILE017.DAT | the intro | gzip'd WAV sounds, Ogg Vorbis music (original or remastered) | original, 320x200 (see below) |
-  | Windows 3.1 | BANK (+ WORLD.EXE) | the copy protection | WAV sounds, MIDI music (with the project's SoundFont) | original, 320x200 |
+  | Windows 3.1 | BANK (+ WORLD.EXE) | the copy protection | WAV sounds, MIDI music (with a SoundFont, below) | original, 320x200 |
   | 3DO | GameData/File340, or the disc (.iso, .chd) | its logos and title | AIFF sounds, SDX2 AIFF-C songs | 15-bit colour, and its full-screen pictures |
 
   The anniversary editions run in rawgl's software renderer, as its "original" renderer draws them: the game's
@@ -76,13 +76,18 @@ the CM-32L is Munt's.
   still held is not pressed again until it is let go. Jump exists on the 3DO only (`IsButtonActive`). The 3DO's
   Back key, which opens its end menu, is not offered: its "yes" stops rawgl (docs/PLAN.md).
 - **Settings**: Language, Random seed (0..65535), Difficulty (the 20th's, rawgl's `--difficulty`),
-  Remastered Sound (the anniversary editions', rawgl's `--audio`) and MT-32 Sound Effects (the DOS release's,
-  rawgl's `--mt32`).
+  Remastered Sound (the anniversary editions', rawgl's `--audio`), MT-32 Sound Effects (the DOS release's,
+  rawgl's `--mt32`) and SoundFont Music (Windows 3.1's).
 - **The MT-32**: with the mt32 setting, rawgl sends the DOS release's sound effects it has a note for (41 of
   them) to a Roland CM-32L's rhythm part instead of playing the game's samples - Munt's libmt32emu, compiled in,
   with the CM-32L's ROMs the project brings as firmware (`CM32L_CONTROL.ROM`, `CM32L_PCM.ROM`; another pair Munt
   knows may take their place). The music stays the game's own. A project with the setting and without the ROMs,
   or with files that are not ROMs, is refused, naming them.
+- **The SoundFont**: Windows 3.1's music is two General MIDI files. With the soundFont setting, TinySoundFont
+  plays them with a General MIDI SoundFont of the user's choice, which the project brings as firmware
+  (`soundfont.sf2`; no hash pinned - the project records the one chosen). Without the setting the music is
+  silent, as rawgl without a MIDI synthesizer; the game and its timing are the same either way. A project with
+  the setting and without the file, or with a file that is not a SoundFont, is refused.
 - **Properties** (Chimera's `docs/game-cores.md`): a `Game State` block (the part, the part to come, the
   screen, the release, the language, the machine's steps and milliseconds, whether the music plays, whether
   the engine halted) and the game's **256 script variables** in place (`Script Variables`, writable): the
@@ -94,8 +99,8 @@ the CM-32L is Munt's.
 
 ## What has been run
 
-**Every release but three has run on real data** (below): DOS, Amiga (English), Atari ST, 3DO, the 15th and
-20th Anniversary Editions and Windows 3.1. Not yet: the Amiga's French release, the Atari ST demo, the DOS demo. Every
+**Every release but one has run on real data** (below): DOS and its demo, Amiga (English), Atari ST and its
+demo, 3DO, the 15th and 20th Anniversary Editions and Windows 3.1. Not yet: the Amiga's French release. Every
 release has also run as the core's **synthetic game** - its own bytecode, pictures, sounds and music written in that release's
 format (`waterbox/tests/make-synthetic.py`) - through the whole path its files take: native == sandbox,
 rerecord, session. That proves the core's side (the files, the step, the clock, the sound decoders, the
@@ -153,6 +158,18 @@ General MIDI SoundFont (FluidR3 GM, the test's; any the project brings), the fir
 native == sandbox, rerecord, session. MIDI costs: with a 148 MB General MIDI SoundFont the intro renders about
 six times faster than it plays, against ninety without music - fine to play, slower to seek through.
 
+**Out of This World, DOS demo (Interplay, 1992: `ootwdemo.zip`, archive.org's "OutOfThisWorldDemo")**: the
+zip as it is (MEMLIST.BIN, BANK01, 02, 05, 06 and 0D, DEMO3.JOY, the demo's own programs). No copy protection:
+the intro, then the first level (the pool, the first screens) until Lester dies - 3,640 steps: native ==
+sandbox, rerecord, session. DEMO3.JOY holds the demo's recorded inputs, which rawgl plays with its
+`--demo3-joy` option in place of the player's; the core leaves it off - the player plays.
+
+**Another World, Atari ST rolling demo (ST Action issue 44, December 1991, cover disk 28: archive.org's "ST
+Action (UK) Magazine Coverdisks")**: the disk's image as it is - the .st or the Pasti .stx, the same machine -
+holds AW.TOS (96,513 bytes, the size rawgl knows it by) beside two other demos. The intro, to the lightning in
+the accelerator; then the last picture holds, as upstream rawgl has it (the demo carries no more of the game) -
+3,200 steps: native == sandbox, rerecord, session.
+
 **Out of This World (3DO, USA: a CHD, MAME's compressed image - one MODE1_RAW track of 164,290 frames)**: the
 project brings the .chd as it is; libchdr reads it (LZMA, zlib and FLAC hunks), a hunk at a time, through
 callbacks that open, read and close the mounted file, so a savestate holds nothing of the host's. The Interplay
@@ -163,11 +180,11 @@ sandbox, rerecord, session; and chimera-run taking the .chd as its rom.
 | Release | Synthetic game | Real files |
 |---|---|---|
 | DOS | yes, and its effects on a CM-32L (with real CM-32L ROMs) | **yes**: Out of This World (US), the copy protection answered, its credits, the whole intro, the first level; native == sandbox, rerecord, session; and with the CM-32L |
-| DOS demo | (the DOS path, less the password screen) | needs files |
+| DOS demo | (the DOS path, less the password screen) | **yes**: Interplay's 1992 demo (`ootwdemo.zip`), as it comes; the intro, the first level; native == sandbox, rerecord, session |
 | Amiga English | no (rawgl finds its resources by a built-in table keyed on BANK01's size) | **yes**: the two disks' files, the copy protection answered, the whole intro, the first level; native == sandbox, rerecord, session |
 | Amiga French | no (the same) | needs files |
 | Atari ST | no (the same) | **yes**: the two disks' files (TOSEC's Pasti images, "FR"), the copy protection answered, the whole intro, the first level; native == sandbox, rerecord, session |
-| Atari ST demo | no (the same, AW.TOS) | needs files |
+| Atari ST demo | no (the same, AW.TOS) | **yes**: ST Action's cover disk 28 (issue 44, December 1991), its .st or .stx as it is; the rolling intro; native == sandbox, rerecord, session |
 | 15th Anniversary Edition | yes: Pak01.pak, WAV sounds and music, original and remastered | **yes**: the European CD's installation; the whole intro with its music, the first level; native == sandbox, rerecord, session |
 | 20th Anniversary Edition | yes: game/, gzip'd sounds, Ogg music, difficulty, original and remastered | **yes**: GOG's 2.0; the whole intro with its music, the first level; native == sandbox, rerecord, session |
 | Windows 3.1 | yes: BANK (unpacked entries), its palettes, WAV, MIDI with a SoundFont | **yes**: its folder, zipped; the copy protection answered, the intro with its MIDI music (a General MIDI SoundFont), the first level; native == sandbox, rerecord, session |

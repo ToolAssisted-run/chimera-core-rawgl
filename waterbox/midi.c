@@ -4,7 +4,7 @@
  * resource_win31.cpp getMusicName) through SDL_mixer, which renders them with
  * whatever synthesizer the host has. The core renders them itself, with
  * TinySoundFont (extern/TinySoundFont) and the SoundFont the project brings
- * (the optional "soundfont" slot): the same notes on every machine, and no
+ * (firmware soundfont.sf2, with the soundFont setting): the same notes on every machine, and no
  * music at all without a SoundFont - as rawgl's SDL build without a MIDI
  * synthesizer.
  *

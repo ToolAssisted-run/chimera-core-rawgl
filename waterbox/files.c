@@ -90,6 +90,7 @@ void rawgl_settings_read(struct rawgl_settings *s)
 	s->difficulty = !strcmp(str, "easy") ? 0 : !strcmp(str, "hard") ? 2 : 1;
 	s->remastered_audio = wbx_setting_bool("remasteredAudio", 1);
 	s->mt32 = wbx_setting_bool("mt32", 0);
+	s->soundfont = wbx_setting_bool("soundFont", 0);
 }
 
 /* ------------------------------------------------------------ the zip */
@@ -713,13 +714,11 @@ int rawgl_files_load(char *err, int errsize)
 	return ok;
 }
 
-/* the SoundFont Windows 3.1's MIDI music is played with: the project's
- * "soundfont" slot, or soundfont.sf2 for a harness; NULL when there is none */
+/* the SoundFont Windows 3.1's MIDI music is played with: the firmware the
+ * soundFont setting asks for, mounted under its id */
 FILE *rawgl_files_soundfont(void)
 {
-	char name[256];
-	if (!wbx_slot_name("soundfont", 0, name, (int)sizeof name)) snprintf(name, sizeof name, "soundfont.sf2");
-	return fopen(name, "rb");
+	return fopen("soundfont.sf2", "rb");
 }
 
 int rawgl_files_count(void) { return g_nfiles + (g_has_host != 0); }
