@@ -26,7 +26,7 @@ Started 2026-09-30, from the SDLPoP2 core's shape (the driver, the harnesses, th
 - **M6, savestates**: free - the engine's stack is guest memory (`coro.c`, MAP_STACK), the files are sealed.
   Rerecord (save and load before every step) and session (save while paused, new host, load) legs pass.
 - **M7, the package**: `waterbox.config`, keybinds, `file_slots.json`, licences; a deterministic package.
-- **The gate**: 80 legs on the synthetic game in every release's format and every container, including the
+- **The gate**: 87 legs on the synthetic game in every release's format and every container, including the
   package through chimera-run and (with `-r`) the CM-32L.
 
 ## The real DOS release (2026-09-30)
@@ -177,6 +177,39 @@ screen. 3,907 steps: native == sandbox, rerecord, session; chimera-run with the 
 disc is also written as an (uncompressed) CHD, and the gate holds it to the same machine as the folder and the
 image.
 
+## The releases as machines (2026-09-30)
+
+Sergio, through Chimera-Desktop: "The game variant (amiga, dos, 3do, etc...) needs to be exposed as "System".
+Then, fully skip the game files wizard right into the settings. The settings need to be per-system (20th
+anniversary difficulty needs to be only shown when using the 20th anniversary edition). Then the firmware page
+is what requires the game files to be provided, depending on the system selected." Modelled on
+chimera-core-sdlpop2's three releases:
+
+- `waterbox.config`: `machineSetting` "release", ten `machines` (all `AnotherWorld`, DOS first, the default),
+  the enum setting `release`; `when` on the settings (language: the releases with texts of their own;
+  difficulty: 20th; remasteredAudio: 15th, 20th; mt32: dos, dosdemo; soundFont: win31); 21 firmware entries
+  for the game's files, each `requiredWhen` its release (the 15th's texts: release and language), pinned to
+  the tested dumps' hashes but for the 20th's zip; the CM-32L ROMs and the SoundFont also require their
+  release. `file_slots.json`: `"slots": []`.
+- `files.c`: `k_releases` and `k_release_files`, the same lists (the gate compares them with the
+  declaration). The loader opens the release's files by id; a file is read as what it is (a disk image, a
+  zip, the 3DO disc, or a file of the game's, placed where the folder has it - the 15th's `Pak01.pak` in
+  `Data/`, its Oggs in `Music/`, an `Intro2004.ogg` that is a WAV as `Music/AW/Intro2004.wav`, its texts in
+  `Menu/`, Windows 3.1's four at the top). The 15th's French and Spanish texts are `lang_Français.Txt` and
+  `lang_Español.txt` on the CD, names rawgl's ASCII `lang_Francais.Txt` and `lang_Espanol.txt` never matched:
+  mounted under rawgl's names, they now load. A setting counts only on its releases (mt32 off the DOS ones,
+  soundFont off Windows 3.1's). No check that the files are the release's: rawgl tells the release by them,
+  and the wizard's hashes say when a file is not the one tested. Without any of the release's files, the
+  "game" slot and the harness names (rom, game.zip, game.iso, game.chd) still work - chimera-run's rom mode,
+  the synthetic legs.
+- Real data, each release through its firmware = the same files through the old path, native == sandbox, on
+  the runs above (DOS 4,040 steps, Amiga EN 3,767, FR 3,980, Atari ST 3,767, Windows 3.1 3,590 with FluidR3,
+  3DO 3,907 from the .iso, 15th 3,097, 20th 3,097, DOS demo 3,640, ST demo 3,200).
+- The 3DO disc as firmware: the guest still reads it in place, a block at a time, with nothing of it in the
+  machine's memory or its savestates. But Chimera hands firmware to the engine as bytes (session.cpp copies
+  them before mounting), where a game slot's file was mounted by path: 336 MB of host memory, twice, for
+  the .iso (216 MB for the .chd). Mounting firmware by path is Chimera's to change.
+
 ## The 3DO disc as an .iso (2026-09-30)
 
 Sergio's "Out of this World (USA).iso" (336,465,920 bytes, 2DEF26C5B687E52C5376129B1538E2B182B09100) is the
@@ -313,9 +346,6 @@ Found in rawgl, not changed:
 
 ## Left
 
-- **Releases as machines**: once each has run, expose them to Chimera to choose (as SDLPoP2's versions), which
-  also lets firmware be required per release.
-- **Firmware declarations** (see above), once the releases' files can be hashed.
 - **rawgl's licence**: rawgl states none. Sergio (2026-09-30) chose to publish anyway, as SyndicatFX does with
   its disassembly: in good faith, taken down should the author object. Asking the author for terms remains
   worth doing.

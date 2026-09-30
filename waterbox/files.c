@@ -1,12 +1,17 @@
-/* files.c - the game's data files, out of the project's file, and the settings.
+/* files.c - the game's data files, out of the project's files, and the settings.
  *
- * A project brings Another World's own files (the "game" slot,
- * file_slots.json): a .zip of the game's folder, its floppy disks' images, the
- * 15th Anniversary Edition's files as they are (Pak01.pak, its music's .ogg,
- * its texts' lang_*.Txt), or the 3DO release's disc - its image (.iso) or
- * MAME's compressed image of it (.chd) - as it is. Never an installer: where a
- * release ships its files inside one (the 15th's CD, GOG's 20th), the core
- * asks for the files, saying which.
+ * A project picks a release - the "release" setting, which Chimera shows as
+ * the machine (waterbox.config "machines") - and brings that release's own
+ * files as firmware, each mounted under its id (k_release_files below, the
+ * same list as waterbox.config's firmware; the gate checks the two agree):
+ * the floppy releases' disk images (or a zip of the files on them), the 3DO's
+ * disc (its image, .iso, or MAME's compressed image of it, .chd), the 15th
+ * Anniversary Edition's Pak01.pak, music and texts, a zip of the 20th's game
+ * folder, Windows 3.1's four files. Never an installer: where a release ships
+ * its files inside one (the 15th's CD, GOG's 20th), the core asks for the
+ * files, saying which. Without any of the release's files, a host that is no
+ * project's - chimera-run given a rom, the core's harnesses - may still bring
+ * one file (or a "game" slot of several) as before.
  *
  *   - A zip (or a loose file) is unpacked once, at Init, into sealed memory - read-only after
  *     Init, and so never part of a savestate - and the engine's every open
@@ -91,7 +96,55 @@ void rawgl_settings_read(struct rawgl_settings *s)
 	s->remastered_audio = wbx_setting_bool("remasteredAudio", 1);
 	s->mt32 = wbx_setting_bool("mt32", 0);
 	s->soundfont = wbx_setting_bool("soundFont", 0);
+	/* a setting counts for the releases it is shown for (waterbox.config
+	 * "when"): one left on from another release asks for nothing */
+	char release[16] = "dos";
+	wbx_setting_str("release", release, (int)sizeof release);
+	if (strcmp(release, "dos") && strcmp(release, "dosdemo")) s->mt32 = 0;
+	if (strcmp(release, "win31")) s->soundfont = 0;
 }
+
+/* ------------------------------------------------------------ the releases */
+
+static const struct { const char *id, *label; } k_releases[] = {
+	{ "dos", "Another World (DOS)" },
+	{ "amiga", "Another World (Amiga, English)" },
+	{ "amigafr", "Another World (Amiga, French)" },
+	{ "atari", "Another World (Atari ST)" },
+	{ "win31", "Out of This World (Windows 3.1)" },
+	{ "3do", "Out of This World (3DO)" },
+	{ "15th", "Another World 15th Anniversary Edition" },
+	{ "20th", "Another World 20th Anniversary Edition" },
+	{ "dosdemo", "Out of This World (DOS demo)" },
+	{ "stdemo", "Another World (Atari ST rolling demo)" },
+};
+
+/* each release's files: the firmware ids they are mounted under; a language
+ * of its own for a file only that language needs */
+static const struct { const char *release, *id, *language; } k_release_files[] = {
+	{ "dos", "dos-disk", NULL },
+	{ "amiga", "amiga-en-disk1", NULL },
+	{ "amiga", "amiga-en-disk2", NULL },
+	{ "amigafr", "amiga-fr-disk1", NULL },
+	{ "amigafr", "amiga-fr-disk2", NULL },
+	{ "atari", "atari-disk1", NULL },
+	{ "atari", "atari-disk2", NULL },
+	{ "win31", "BANK", NULL },
+	{ "win31", "WORLD.EXE", NULL },
+	{ "win31", "X.MID", NULL },
+	{ "win31", "Y.MID", NULL },
+	{ "3do", "3do-disc", NULL },
+	{ "15th", "Pak01.pak", NULL },
+	{ "15th", "Intro2004.ogg", NULL },
+	{ "15th", "End2004.ogg", NULL },
+	{ "15th", "lang_English.Txt", "us" },
+	{ "15th", "lang_Francais.Txt", "fr" },
+	{ "15th", "lang_Espanol.txt", "es" },
+	{ "20th", "20th-game", NULL },
+	{ "dosdemo", "dos-demo", NULL },
+	{ "stdemo", "atari-demo-disk", NULL },
+};
+
 
 /* ------------------------------------------------------------ the zip */
 
@@ -274,7 +327,7 @@ static int is_iso9660_pvd(const uint8_t *sector)
 
 /* what the core asks for where a release comes inside an installer */
 #define ASK_15TH "the 15th Anniversary Edition's Pak01.pak, with Intro2004.ogg, End2004.ogg and lang_<language>.Txt for its music and texts"
-#define ASK_RAW "the game's own files from it instead: " ASK_15TH "; the 20th's game folder, zipped; Windows 3.1's BANK, WORLD.EXE, X.MID and Y.MID, zipped"
+#define ASK_RAW "the game's own files from it instead: " ASK_15TH "; the 20th's game folder, zipped"
 #define ASK_PC_CD "the 15th Anniversary Edition's CD holds the game inside an installer, which the core does not open: add " ASK_15TH
 
 static int contains(const uint8_t *buf, size_t n, const char *what)
@@ -481,6 +534,19 @@ static int has_cand(const char *root, const char *rel)
 	return 0;
 }
 
+/* a release's file mounted under its id, where the game's folder has it: the
+ * 15th's (flat_place; an Intro2004.ogg that is a WAV is the other editions'
+ * Music/AW/Intro2004.wav), and the rest - Windows 3.1's BANK, WORLD.EXE,
+ * X.MID, Y.MID - under its id, at the folder's top */
+static const char *fw_place(const char *id, const uint8_t *head, long size, char *out, size_t cap)
+{
+	if (size >= 12 && !memcmp(head, "PACK", 4)) snprintf(out, cap, "Data/Pak01.pak");
+	else if (ends_with_ci(id, ".ogg") && size >= 12 && !memcmp(head, "RIFF", 4))
+		snprintf(out, cap, "Music/AW/%.*s.wav", (int)(strlen(id) - 4), id);
+	else if (!flat_place(id, out, cap)) snprintf(out, cap, "%.250s", id);
+	return out;
+}
+
 static int add_loose(const char *name, const char *place, long size, char *err, int errsize)
 {
 	if (g_nloose == MAX_LOOSE)
@@ -524,6 +590,41 @@ static int said_installer(char *err, int errsize)
 	return said;
 }
 
+/* whether a file is a floppy's image the core reads */
+static int disk_kind_of(const char *name, long size)
+{
+	if (size <= 0 || (unsigned long)size > MAX_DISK) return 0;
+	FILE *f = fopen(name, "rb");
+	if (!f) return 0;
+	uint8_t *img = malloc((size_t)size);
+	const int ok = img && fread(img, 1, (size_t)size, f) == (size_t)size && disk_kind(img, (size_t)size);
+	fclose(f);
+	free(img);
+	return ok;
+}
+
+/* a release's file that is an installer, or a PC CD's image, is refused,
+ * naming the files to take out of it; 1 when it is neither */
+static int refuse_container(const char *name, char *err, int errsize)
+{
+	uint8_t *buf = malloc(INSTALLER_PEEK);
+	const long n = buf ? peek(name, buf, INSTALLER_PEEK) : -1;
+	const char *kind = n > 0 ? installer_kind(buf, (size_t)(n < (long)INSTALLER_PEEK ? n : (long)INSTALLER_PEEK)) : NULL;
+	int ok = 1;
+	if (kind)
+	{
+		snprintf(err, (size_t)errsize, "%s is %s, which the core does not open: add %s", name, kind, ASK_RAW);
+		ok = 0;
+	}
+	else if (n >= 0x8000 + 8 && is_iso9660_pvd(buf + 0x8000))
+	{
+		snprintf(err, (size_t)errsize, "%s is a PC CD's image, not the 3DO's disc: %s", name, ASK_PC_CD);
+		ok = 0;
+	}
+	free(buf);
+	return ok;
+}
+
 static void release_sources(void)
 {
 	for (int z = 0; z < g_nzips; z++)
@@ -561,7 +662,7 @@ static int settle(char *err, int errsize)
 	if (!found)
 	{
 		if (!said_installer(err, errsize))
-			snprintf(err, (size_t)errsize, "the project's files hold no Another World data. It takes the game's own files: the DOS release's disk images (or MEMLIST.BIN and the BANK files, zipped); the Amiga's or the Atari ST's disk images (or their BANK files, zipped); %s; the 20th's game folder, zipped; Windows 3.1's BANK, WORLD.EXE, X.MID and Y.MID, zipped; or the 3DO disc (.chd, .iso)", ASK_15TH);
+			snprintf(err, (size_t)errsize, "the files hold no Another World data: none has what rawgl knows a release by - MEMLIST.BIN (DOS), BANK01 (Amiga, Atari ST), AW.TOS (the Atari ST demo), Data/Pak01.pak (the 15th Anniversary Edition), game/DAT/FILE017.DAT (the 20th), BANK (Windows 3.1), GameData/ (3DO)");
 		return 0;
 	}
 	const size_t rootlen = strlen(root);
@@ -637,30 +738,69 @@ static int open_disc(const char *name, const uint8_t *head, long size, char *err
 
 int rawgl_files_load(char *err, int errsize)
 {
-	/* the project's slot map names the files; without one, a host that is not
-	 * a project's mounts one as "rom" (chimera-run <package> <rom>), and the
-	 * core's harnesses as game.zip, game.iso or game.chd (several disks: with
-	 * a "slots" file) */
-	static const char *const fallbacks[] = { "rom", "game.zip", "game.iso", "game.chd" };
-	char names[8][256];
-	int count = 0;
-	while (count < 8 && wbx_slot_name("game", count, names[count], (int)sizeof names[0])) count++;
-	const int from_slot = count > 0;
-	if (!from_slot)
-		for (size_t i = 0; i < sizeof fallbacks / sizeof fallbacks[0]; i++)
-		{
-			uint8_t h[4];
-			if (peek(fallbacks[i], h, sizeof h) >= 0)
-			{
-				snprintf(names[0], sizeof names[0], "%s", fallbacks[i]);
-				count = 1;
-				break;
-			}
-		}
-	if (!count)
+	/* the release the project picked, and its files (firmware, under their ids) */
+	char release[16] = "dos", language[8] = "us";
+	wbx_setting_str("release", release, (int)sizeof release);
+	wbx_setting_str("language", language, (int)sizeof language);
+	const char *label = NULL;
+	for (size_t i = 0; i < sizeof k_releases / sizeof k_releases[0]; i++)
+		if (!strcmp(release, k_releases[i].id)) label = k_releases[i].label;
+	if (!label)
 	{
-		snprintf(err, (size_t)errsize, "Another World needs the game's own files: add its disks' images, a .zip of the game's folder, %s, or the 3DO disc (.chd, .iso) to the project", ASK_15TH);
+		snprintf(err, (size_t)errsize, "the setting release is \"%.15s\", which is none of Another World's releases", release);
 		return 0;
+	}
+	char names[24][256];
+	int count = 0, present = 0, missing = -1, firmware = 1;
+	for (size_t i = 0; i < sizeof k_release_files / sizeof k_release_files[0] && count < 24; i++)
+	{
+		if (strcmp(k_release_files[i].release, release)) continue;
+		if (k_release_files[i].language && strcmp(k_release_files[i].language, language)) continue;
+		snprintf(names[count], sizeof names[0], "%s", k_release_files[i].id);
+		uint8_t h[4];
+		if (peek(names[count], h, sizeof h) >= 0) present++;
+		else if (missing < 0) missing = count;
+		count++;
+	}
+	if (present && missing >= 0)
+	{
+		snprintf(err, (size_t)errsize, "%s needs its file %s (firmware), which is not there", label, names[missing]);
+		return 0;
+	}
+	if (!present)
+	{
+		/* no project's release files: a host that is no project's - chimera-run
+		 * given a rom mounts it as "rom", the core's harnesses as game.zip,
+		 * game.iso or game.chd, or name several in a "game" slot */
+		static const char *const fallbacks[] = { "rom", "game.zip", "game.iso", "game.chd" };
+		const int needed = count;
+		firmware = 0;
+		count = 0;
+		while (count < 8 && wbx_slot_name("game", count, names[count], (int)sizeof names[0])) count++;
+		if (!count)
+			for (size_t i = 0; i < sizeof fallbacks / sizeof fallbacks[0]; i++)
+			{
+				uint8_t h[4];
+				if (peek(fallbacks[i], h, sizeof h) >= 0)
+				{
+					snprintf(names[0], sizeof names[0], "%s", fallbacks[i]);
+					count = 1;
+					break;
+				}
+			}
+		if (!count)
+		{
+			char list[512] = "";
+			for (size_t i = 0, n = 0; i < sizeof k_release_files / sizeof k_release_files[0]; i++)
+			{
+				if (strcmp(k_release_files[i].release, release)) continue;
+				if (k_release_files[i].language && strcmp(k_release_files[i].language, language)) continue;
+				const size_t at = strlen(list);
+				snprintf(list + at, sizeof list - at, "%s%s", n++ ? ", " : "", k_release_files[i].id);
+			}
+			snprintf(err, (size_t)errsize, "%s needs its files (firmware): %s%s", label, list, needed ? "" : " - none");
+			return 0;
+		}
 	}
 
 	int ok = 1;
@@ -688,8 +828,18 @@ int rawgl_files_load(char *err, int errsize)
 		}
 		else if (size >= 4 && head[0] == 'P' && head[1] == 'K' && (head[2] == 3 || head[2] == 5))
 			ok = add_zip(names[i], size, err, errsize);
-		else if (raw_place(names[i], head, size, place, sizeof place))
+		else if (!firmware && raw_place(names[i], head, size, place, sizeof place))
 			ok = add_loose(names[i], place, size, err, errsize);
+		else if (firmware && size > (long)MAX_DISK)
+		{
+			/* a release's file too large for a floppy: a file of the game's, unless
+			 * it is an installer or a PC CD's image */
+			ok = refuse_container(names[i], err, errsize)
+				&& add_loose(names[i], fw_place(names[i], head, size, place, sizeof place), size, err, errsize);
+		}
+		else if (firmware && !disk_kind_of(names[i], size))
+			ok = refuse_container(names[i], err, errsize)
+				&& add_loose(names[i], fw_place(names[i], head, size, place, sizeof place), size, err, errsize);
 		else if (!add_disk(names[i], size, err, errsize))
 		{
 			if (!err[0])

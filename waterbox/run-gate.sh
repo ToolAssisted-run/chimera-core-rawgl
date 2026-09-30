@@ -17,9 +17,10 @@
 #                machine; Jump the 3DO's only; the soundFont setting (with the
 #                SoundFont firmware) changes Windows 3.1's sound and nothing else
 #   disks        the synthetic DOS game on floppy images the core reads as they
-#                are - a DOS .img, two Amiga .adf, two Atari ST .st, .msa and
-#                .stx (a protected track and all), a zip of the two .adf -
-#                each the same machine as the zip, native = sandbox
+#                are, as the releases' firmware - a DOS .img (dos-disk), two
+#                Amiga .adf (amiga-en-disk1, 2), two Atari ST .st, .msa and .stx
+#                (a protected track and all; atari-disk1, 2), each .adf in a zip
+#                of its own - each the same machine as the zip, native = sandbox
 #   loose        the synthetic 15th Anniversary Edition's files as they come out
 #                of its installer, loose (its Pak01.pak under another name, the
 #                intro's music an Ogg, its texts) = the same files zipped in
@@ -28,7 +29,10 @@
 #                the DOS copy protection's title choice reads, difficulty and
 #                remasteredAudio what the anniversary editions read (both
 #                builds)
-#   slots        the project's slot map names the zip
+#   firmware     waterbox.config's machines and firmware = the loader's tables;
+#                the zip as dos-disk = game.zip; a setting left on from another
+#                release (mt32 on the Amiga) asks for nothing
+#   slots        a slot map names the zip (a host that is no project's)
 #   mt32         the DOS release's sound effects on a CM-32L (Munt), with the
 #                ROMs -r names: native = sandbox, rerecord, session, and only
 #                the sound changes; without ROMs, or with a file that is not
@@ -48,13 +52,14 @@
 #                chimera-run plays a movie in Chimera's format (console
 #                buttons, then P1's), with and without rerecording
 #
-# usage: run-gate.sh [-m <miniBox dir>] [-g <Another World zip or iso> [-M <movie>]] [-f <frames>]
-#                    [-c <chimera-run>] [-r <ROM dir>]
-#   -g adds the equivalence, rerecord and session legs on a real release (the
-#      zip of the game's folder, its disks' images - -g once for each - or the
-#      3DO's disc, .iso or .chd, as a project would bring them, and a
-#      SoundFont (.sf2) for Windows 3.1's music (the firmware, with the
-#      soundFont setting);
+# usage: run-gate.sh [-m <miniBox dir>] [-g [<id>=]<file>]... [-R <release>] [-M <movie>]
+#                    [-f <frames>] [-c <chimera-run>] [-r <ROM dir>]
+#   -g adds the equivalence, rerecord and session legs on a real release: -g
+#      <id>=<file> once for each of the release's files, as a project brings
+#      them (its firmware under its id: dos-disk=..., amiga-fr-disk1=...), -R
+#      the release (dos when omitted); a SoundFont (.sf2) for Windows 3.1's
+#      music (the firmware, with the soundFont setting); a file without an id
+#      goes in a "game" slot, as a host that is no project's may bring it;
 #      not in the repo): 2000 steps from power-on, or the steps of the movie -M
 #      names (a movie of your own, kept out of the repo)
 #   -c runs the engine leg with that chimera-run (build/dll/chimera-run of a
@@ -71,7 +76,8 @@ frames=100
 chimera_run=""
 roms=""
 game_movie=""
-while getopts "m:g:f:c:r:M:" opt; do
+game_release=""
+while getopts "m:g:f:c:r:M:R:" opt; do
 	case "$opt" in
 		m) mb="$OPTARG" ;;
 		g) game="${game:+$game
@@ -80,6 +86,7 @@ while getopts "m:g:f:c:r:M:" opt; do
 		c) chimera_run="$OPTARG" ;;
 		r) roms="$OPTARG" ;;
 		M) game_movie="$OPTARG" ;;
+		R) game_release="$OPTARG" ;;
 		*) exit 2 ;;
 	esac
 done
@@ -159,13 +166,19 @@ for rel in 15th 20th win31 3do 3do-iso 3do-chd; do
 	d="$work/rel-$rel"
 	mkdir -p "$d"
 	case $rel in
-		3do-iso) python3 "$here/tests/make-synthetic.py" --release $rel "$d/game.iso" ;;
-		3do-chd) python3 "$here/tests/make-synthetic.py" --release $rel "$d/game.chd" ;;
+		# the 3DO's disc and the 20th's zip as a project brings them: the release's
+		# firmware, under its id, and the release setting
+		3do-iso) python3 "$here/tests/make-synthetic.py" --release $rel "$d/3do-disc"
+			printf '{"release": "3do"}' > "$d/settings" ;;
+		3do-chd) python3 "$here/tests/make-synthetic.py" --release $rel "$d/3do-disc"
+			printf '{"release": "3do"}' > "$d/settings" ;;
+		20th) python3 "$here/tests/make-synthetic.py" --release $rel "$d/20th-game"
+			printf '{"release": "20th"}' > "$d/settings" ;;
 		*) python3 "$here/tests/make-synthetic.py" --release $rel "$d/game.zip" ;;
 	esac
 	if [ $rel = win31 ]; then
 		cp "$root/extern/TinySoundFont/examples/florestan-subset.sf2" "$d/soundfont.sf2"
-		printf '{"soundFont": true}' > "$d/settings"
+		printf '{"release": "win31", "soundFont": true}' > "$d/settings"
 	fi
 	digest_run native "$d" $n "$m" --trace "$d/t" --trace-props "Game.Release,Game.Part" > "$d/n"
 	digest_run wbx "$d" $n "$m" > "$d/w"
@@ -212,7 +225,7 @@ for c in img adf st msa stx zip-adf; do
 	python3 "$here/tests/make-synthetic.py" --container $c "$d"
 	digest_run native "$d" "$frames" "$movie" > "$d/n"
 	digest_run wbx "$d" "$frames" "$movie" > "$d/w"
-	same "disks ($c)" "$d/n" "$work/n.txt" "$(ls "$d" | grep -v '^slots$' | grep -v '^[nw]' | tr '\n' ' ')= the zipped folder"
+	same "disks ($c)" "$d/n" "$work/n.txt" "$(ls "$d" | grep -v -e '^settings$' -e '^[nw]\(\.d\)\?$' | tr '\n' ' ')($(sed 's/.*"release": "\([^"]*\)".*/\1/' "$d/settings")) = the zipped folder"
 	same "disks ($c)" "$d/w" "$d/n" "native = sandbox"
 done
 digest_run wbx "$work/disks-adf" "$frames" "$movie" --session-at "$at" > "$work/disks-adf/s"
@@ -226,7 +239,7 @@ digest_run native "$ld" 90 "$m" > "$ld/n"
 digest_run native "$ld/zipped" 90 "$m" > "$ld/z"
 digest_run wbx "$ld" 90 "$m" > "$ld/w"
 digest_run wbx "$ld" 90 "$m" --session-at 54 > "$ld/s"
-same "loose (15th)" "$ld/n" "$ld/z" "$(ls "$ld" | grep -v -e '^slots$' -e '^zipped$' -e '^[nwzs]\(\.d\)\?$' | tr '\n' ' ')as they are = zipped in their folders"
+same "loose (15th)" "$ld/n" "$ld/z" "$(ls "$ld" | grep -v -e '^settings$' -e '^zipped$' -e '^[nwzs]\(\.d\)\?$' | tr '\n' ' ')(the 15th's firmware) = zipped in their folders"
 same "loose (15th)" "$ld/w" "$ld/n" "native = sandbox"
 same "loose (15th)" "$ld/s" "$ld/w" "session at step 54 = straight"
 if [ "$(value "$ld/n" audioHash)" != "$(value "$work/rel-15th/n" audioHash)" ] && [ "$(value "$ld/n" videoHash)" = "$(value "$work/rel-15th/n" videoHash)" ]; then
@@ -234,6 +247,77 @@ if [ "$(value "$ld/n" audioHash)" != "$(value "$work/rel-15th/n" audioHash)" ] &
 else
 	fail "loose (15th): the Ogg music did not play, or more than the sound changed"
 fi
+
+echo "== firmware"
+# the declaration and the loader name the same files: waterbox.config's
+# firmware entries a release requires = files.c's k_release_files, and its
+# machines = files.c's k_releases
+if python3 - "$here" <<'PY'
+import json, re, sys
+here = sys.argv[1]
+cfg = json.load(open(here + "/waterbox.config"))
+decl = set()
+def releases(c):
+    if "all" in c:
+        r = [x for x in (releases(y) for y in c["all"]) if x]
+        return r[0] if r else None
+    if c.get("setting") == "release":
+        return c["in"] if "in" in c else [c["is"]]
+    return None
+def language(c):
+    for y in c.get("all", []):
+        if y.get("setting") == "language": return y["is"]
+    return None
+for e in cfg["firmware"]:
+    rs = releases(e.get("requiredWhen", {}))
+    if rs and not any(y.get("setting") in ("mt32", "soundFont") for y in e["requiredWhen"].get("all", [])):
+        for r in rs: decl.add((r, e["id"], language(e["requiredWhen"])))
+src = open(here + "/files.c").read()
+core = set((r, i, None if l == "NULL" else l.strip('"')) for r, i, l in
+           re.findall(r'\{ "([^"]+)", "([^"]+)", (NULL|"[^"]+") \}', src.split("k_release_files[]")[1].split("};")[0]))
+machines = [(m["when"][0], m["label"]) for m in cfg["machines"]]
+labels = re.findall(r'\{ "([^"]+)", "([^"]+)" \}', src.split("k_releases[]")[1].split("};")[0])
+opts = [s for s in cfg["settings"] if s["name"] == cfg["machineSetting"]][0]["options"]
+ok = decl == core and machines == labels and [m[0] for m in machines] == opts
+if not ok:
+    print("declaration only:", sorted(decl - core, key=str), "core only:", sorted(core - decl, key=str))
+    print("machines", machines, "core", labels, "options", opts)
+sys.exit(0 if ok else 1)
+PY
+then
+	pass "firmware: waterbox.config's machines and each release's firmware = the loader's tables"
+else
+	fail "firmware: waterbox.config and files.c disagree"
+fi
+# the synthetic DOS game's zip as the DOS release's firmware
+mkdir -p "$work/fw-dos"
+cp "$work/synth/game.zip" "$work/fw-dos/dos-disk"
+printf '{"release": "dos"}' > "$work/fw-dos/settings"
+digest_run native "$work/fw-dos" "$frames" "$movie" > "$work/fw-dos/n"
+digest_run wbx "$work/fw-dos" "$frames" "$movie" > "$work/fw-dos/w"
+same firmware "$work/fw-dos/n" "$work/n.txt" "the zip as dos-disk (release dos) = game.zip"
+same firmware "$work/fw-dos/w" "$work/fw-dos/n" "native = sandbox"
+# a setting counts only for the releases it is shown for: the mt32 setting on
+# the Amiga's machine asks for no ROM and changes nothing
+mkdir -p "$work/fw-mt32"
+cp "$work/synth/game.zip" "$work/fw-mt32/"
+printf '{"release": "amiga", "mt32": true}' > "$work/fw-mt32/settings"
+digest_run native "$work/fw-mt32" "$frames" "$movie" > "$work/fw-mt32/n" || true
+digests "$work/fw-mt32/n" > "$work/fw-mt32/n.d"
+digests "$work/n.txt" > "$work/fw-mt32/ref.d"
+if cmp -s "$work/fw-mt32/n.d" "$work/fw-mt32/ref.d"; then
+	pass "firmware: the mt32 setting left on for the Amiga's machine asks for no ROM and changes nothing"
+else
+	fail "firmware: the mt32 setting on the Amiga's machine: $(sed -n 's/^loadError=//p' "$work/fw-mt32/n")"
+fi
+mkdir -p "$work/fw-half" "$work/fw-bad" "$work/fw-nsis"
+cp "$work/disks-adf/amiga-en-disk1" "$work/fw-half/"
+printf '{"release": "amiga"}' > "$work/fw-half/settings"
+cp "$work/synth/game.zip" "$work/fw-bad/"
+printf '{"release": "psx"}' > "$work/fw-bad/settings"
+for f in Intro2004.ogg End2004.ogg lang_English.Txt settings; do cp "$work/loose/$f" "$work/fw-nsis/"; done
+python3 -c "
+import sys; b = bytearray(b'MZ' + b'\0' * 70000); b[0xDE00:0xDE00 + 12] = b'NullsoftInst'; open(sys.argv[1], 'wb').write(b)" "$work/fw-nsis/Pak01.pak"
 
 echo "== settings"
 mkgame seed
@@ -256,9 +340,9 @@ for build in native wbx; do
 		diff_name=${opt%%:*}; rest=${opt#*:}; want_d=${rest%%:*}; want_r=${rest#*:}
 		sd="$work/rel20-$diff_name"
 		mkdir -p "$sd"
-		cp "$work/rel-20th/game.zip" "$sd/"
+		cp "$work/rel-20th/20th-game" "$sd/"
 		remaster=true; [ $want_r = 0 ] && remaster=false
-		printf '{"difficulty": "%s", "remasteredAudio": %s}' $diff_name $remaster > "$sd/settings"
+		printf '{"release": "20th", "difficulty": "%s", "remasteredAudio": %s}' $diff_name $remaster > "$sd/settings"
 		$run "$sd" --frames 2 --trace "$sd/t.$build" --trace-props "Var[191],Var[222]" > /dev/null 2>&1
 		got="$(last "$sd/t.$build" 1) $(last "$sd/t.$build" 2)"
 		if [ "$got" = "$want_d $want_r" ]; then
@@ -273,8 +357,8 @@ done
 for rel in 15th 20th; do
 	sd="$work/rel-$rel-orig"
 	mkdir -p "$sd"
-	cp "$work/rel-$rel/game.zip" "$sd/"
-	printf '{"remasteredAudio": false}' > "$sd/settings"
+	for f in game.zip 20th-game; do if [ -f "$work/rel-$rel/$f" ]; then cp "$work/rel-$rel/$f" "$sd/"; fi; done
+	printf '{"release": "%s", "remasteredAudio": false}' $rel > "$sd/settings"
 	digest_run native "$sd" 90 "$here/tests/synthetic-nth.movie" > "$sd/n"
 	if [ "$(value "$sd/n" audioHash)" != "$(value "$work/rel-$rel/n" audioHash)" ] && [ "$(value "$sd/n" videoHash)" = "$(value "$work/rel-$rel/n" videoHash)" ]; then
 		pass "settings: $rel, remasteredAudio false plays the original sounds (another sound, the same pictures)"
@@ -344,10 +428,10 @@ mkdir -p "$work/empty" "$work/notzip" "$work/nodata" "$work/unknown" "$work/badp
 	"$work/nsis" "$work/inno" "$work/pciso" "$work/pcchd" "$work/sf-none" "$work/sf-bad"
 for sd in sf-none sf-bad; do
 	cp "$work/rel-win31/game.zip" "$work/$sd/"
-	printf '{"soundFont": true}' > "$work/$sd/settings"
+	printf '{"release": "win31", "soundFont": true}' > "$work/$sd/settings"
 done
 echo "not a SoundFont" > "$work/sf-bad/soundfont.sf2"
-refuse empty "needs the game's own files" "no files"
+refuse empty "Another World (DOS) needs its files (firmware): dos-disk" "no files"
 echo "not a zip" > "$work/notzip/game.zip"
 refuse notzip "is not a zip, a disk image" "not a zip, a disk image or a disc"
 python3 - "$work" <<'PY'
@@ -392,6 +476,9 @@ refuse mt32-none "CM32L_CONTROL.ROM is not there" "mt32 without the CM-32L's ROM
 refuse mt32-bad "is not a Roland ROM Munt knows" "mt32 with ROMs that are not"
 refuse sf-none "soundfont.sf2 is not there" "soundFont without the SoundFont"
 refuse sf-bad "soundfont.sf2 is not a SoundFont" "soundFont with a file that is not one"
+refuse fw-half "needs its file amiga-en-disk2 (firmware), which is not there" "the Amiga's machine with one of its two disks"
+refuse fw-bad "none of Another World's releases" "a release the core does not have"
+refuse fw-nsis "Pak01.pak is an NSIS installer, which the core does not open" "the 15th's Pak01.pak that is its installer"
 
 echo "== halts"
 for kind in opcode shape; do
@@ -436,8 +523,8 @@ fire = "|" + "." * 29 + "|" + "....F" + "|"
 open(sys.argv[1], "w").write("\n".join([idle] * 10 + [fire] + [idle] * 49) + "\n")
 PY
 	part() { python3 -c "import struct, sys; print(struct.unpack('<H', open(sys.argv[1], 'rb').read()[:2])[0])" "$1"; }
-	( cd "$work" && "$chimera_run" "$work/package/rawgl.chimeraCore" "$work/synth/game.zip" "$work/engine.txt" --dump "Game State=$work/engine.gs" ) > "$work/engine.out" 2>&1 || true
-	( cd "$work" && "$chimera_run" "$work/package/rawgl.chimeraCore" "$work/synth/game.zip" "$work/engine.txt" --rerecord --dump "Game State=$work/engine-r.gs" ) > "$work/engine-r.out" 2>&1 || true
+	( cd "$work" && "$chimera_run" "$work/package/rawgl.chimeraCore" "$work/synth/game.zip" "$work/engine.txt" --firmware "dos-disk=$work/synth/game.zip" --dump "Game State=$work/engine.gs" ) > "$work/engine.out" 2>&1 || true
+	( cd "$work" && "$chimera_run" "$work/package/rawgl.chimeraCore" "$work/synth/game.zip" "$work/engine.txt" --rerecord --firmware "dos-disk=$work/synth/game.zip" --dump "Game State=$work/engine-r.gs" ) > "$work/engine-r.out" 2>&1 || true
 	if [ -f "$work/engine.gs" ] && [ "$(part "$work/engine.gs")" = 16003 ] && cmp -s "$work/engine.gs" "$work/engine-r.gs"; then
 		pass "engine: chimera-run plays fire at step 10 to part 16003 by step 60, the same with --rerecord"
 	else
@@ -448,16 +535,19 @@ fi
 if [ -n "$game" ]; then
 	echo "== Another World ($(echo "$game" | tr '\n' ' ')${game_movie:+, $game_movie})"
 	mkdir -p "$work/game"
-	# the files under their own names, and a slot map naming them, as a
-	# project mounts them: a SoundFont (.sf2) as the firmware, with the
-	# soundFont setting; the rest in the game slot
+	# as a project mounts them: <id>=<file> is the release's firmware under its
+	# id (-R names the release); a SoundFont (.sf2) is the soundfont.sf2
+	# firmware, with the soundFont setting; any other file goes in a "game"
+	# slot, as a host that is no project's may bring it
 	slots='{"game": ['
 	sep=''
+	sf=''
 	while IFS= read -r f; do
 		case "$f" in
+			*=*)
+				ln -sf "$(cd "$(dirname "${f#*=}")" && pwd)/$(basename "${f#*=}")" "$work/game/${f%%=*}" ;;
 			*.sf2|*.SF2)
-				cp "$f" "$work/game/soundfont.sf2"
-				printf '{"soundFont": true}' > "$work/game/settings" ;;
+				cp "$f" "$work/game/soundfont.sf2"; sf=', "soundFont": true' ;;
 			*)
 				cp "$f" "$work/game/$(basename "$f")"
 				slots="$slots$sep\"$(basename "$f")\""; sep=', ' ;;
@@ -467,6 +557,7 @@ $game
 GAMES
 	slots="$slots]"
 	printf '%s}' "$slots" > "$work/game/slots"
+	printf '{"release": "%s"%s}' "${game_release:-dos}" "$sf" > "$work/game/settings"
 	gn=2000
 	gm=""
 	if [ -n "$game_movie" ]; then

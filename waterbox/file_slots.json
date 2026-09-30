@@ -1,26 +1,4 @@
 {
-  "_comment": "An Another World project brings the game's own files, never an installer: its floppy disks' images, as many as it came on (a DOS disk's .img/.ima, the Amiga's .adf, the Atari ST's .st, .msa or .stx; also inside zips, as TOSEC keeps them), whose files the core reads and merges; the 3DO disc as it is, its image (.iso) or MAME's compressed image of it (.chd), which comes alone; the 15th Anniversary Edition's files as they come out of its installer - Pak01.pak, and Intro2004.ogg, End2004.ogg and lang_<language>.Txt for its music and texts - loose or zipped; or a .zip of the game's folder, for the releases whose files have no extension or keep folders: the DOS release's MEMLIST.BIN and BANK files, the Amiga's or the Atari ST's BANK files, the 20th Anniversary Edition's game/ folder (out of GOG's installer), Windows 3.1's BANK, WORLD.EXE, X.MID and Y.MID. An installer, or the 15th's PC CD, is refused, naming the files to add instead. The core unpacks the files at start into memory no savestate carries, and reads a disc where it lies. Windows 3.1's MIDI music is played with a General MIDI SoundFont, firmware the soundFont setting asks for.",
-  "slots": [
-    {
-      "id": "game",
-      "title": "Game files",
-      "min": 1,
-      "max": -1,
-      "formats": [
-        "zip",
-        "adf",
-        "st",
-        "msa",
-        "stx",
-        "img",
-        "ima",
-        "iso",
-        "chd",
-        "pak",
-        "ogg",
-        "txt"
-      ],
-      "help": "Another World's own files, never an installer. DOS, Amiga, Atari ST: the floppy disks' images, all of them (.img/.ima, .adf, .st/.msa/.stx, or zips of them). 3DO: the disc (.chd or .iso), alone. 15th Anniversary Edition: Pak01.pak, with Intro2004.ogg, End2004.ogg and lang_<language>.Txt for its music and texts (out of its installer; loose or zipped). 20th Anniversary Edition: its game folder, zipped (out of GOG's installer). Windows 3.1: BANK, WORLD.EXE, X.MID and Y.MID, zipped."
-    }
-  ]
+  "_comment": "No files: an Another World project picks its release (the System: waterbox.config's machines) and brings that release's own files as firmware (waterbox.config's firmware entries, each required by the release setting), so the wizard skips its files step.",
+  "slots": []
 }

@@ -17,29 +17,44 @@ the CM-32L is Munt's.
 
 ## What it is
 
-- **Every release rawgl plays**, from the user's own files, **as they come** (the "game" slot) - the game's own
-  files, never an installer:
-  - **its floppy disks' images**, all of them - the DOS PC's (.img/.ima), the Amiga's (.adf, OFS or FFS), the
-    Atari ST's (.st, .msa, .stx - Pasti's images, copy protection and all: the core takes only the files, and
-    the protection is on tracks past the file system); also inside zips, as TOSEC keeps them. The core reads
-    each disk's files (`waterbox/disks.c`) and merges them - a game on two disks is one folder to rawgl;
-  - **the 3DO disc** - MAME's compressed image of it (.chd, read with libchdr: its first data track is what
-    rawgl reads as the disc) or its image (.iso) - which comes alone;
-  - **the 15th Anniversary Edition's files** as they come out of its installer - `Pak01.pak` (known by its
-    contents, whatever its name), and `Intro2004.ogg`, `End2004.ogg` and `lang_<language>.Txt` for its music
-    and texts - loose, or zipped with or without their folders;
-  - or **a .zip of the game's folder**, at its top or in a folder, names in any case, for the files that have no
-    extension or keep folders: the 20th Anniversary Edition's `game/` folder, Windows 3.1's BANK, WORLD.EXE,
-    X.MID and Y.MID, or any release copied off its disks.
+- **Every release rawgl plays is a machine** - Chimera's System list (`waterbox.config` "machines", all of them
+  the `AnotherWorld` system; the release setting is what a project records) - and **its files are the
+  release's firmware**, the game's own files, never an installer. The wizard has no files step: the System
+  picks the release, the settings page shows that release's settings, and the firmware page asks for its files:
 
-  The 15th's CD and GOG's 20th ship the game inside installers (NSIS, Inno Setup), which the core does not
-  open: an installer, loose or in a zip, and the 15th's PC CD (.iso, .chd) are refused, the refusal naming the
-  files to take out of them instead.
+  | System (release setting) | Its files (firmware id) |
+  |---|---|
+  | Another World (DOS) (`dos`) | the disk image, `dos-disk` (.img/.ima, or a zip of MEMLIST.BIN and the BANK files) |
+  | Another World (Amiga, English) (`amiga`) | the two disks, `amiga-en-disk1`, `amiga-en-disk2` (.adf, or TOSEC's zips) |
+  | Another World (Amiga, French) (`amigafr`) | the two disks, `amiga-fr-disk1`, `amiga-fr-disk2` |
+  | Another World (Atari ST) (`atari`) | the two disks, `atari-disk1`, `atari-disk2` (.st, .msa, Pasti's .stx, or TOSEC's zips) |
+  | Out of This World (Windows 3.1) (`win31`) | `BANK`, `WORLD.EXE`, `X.MID`, `Y.MID` |
+  | Out of This World (3DO) (`3do`) | the disc, `3do-disc` (.iso, or MAME's .chd) |
+  | Another World 15th Anniversary Edition (`15th`) | `Pak01.pak`, `Intro2004.ogg`, `End2004.ogg`, and the language's `lang_English.Txt`, `lang_Francais.Txt` or `lang_Espanol.txt` |
+  | Another World 20th Anniversary Edition (`20th`) | a zip of its game folder, `20th-game` |
+  | Out of This World (DOS demo) (`dosdemo`) | `dos-demo` (ootwdemo.zip as it is distributed) |
+  | Another World (Atari ST rolling demo) (`stdemo`) | `atari-demo-disk` (ST Action's cover disk 28, .st or .stx) |
+
+  Each entry pins the hash of the dump it was tested with, so the wizard's folder scan finds it; a file of the
+  user's own is taken too, and the project pins its hash. The settings follow the release: Difficulty is the
+  20th's, Remastered Sound the anniversary editions', MT-32 Sound Effects the DOS release's (and its demo's),
+  SoundFont Music Windows 3.1's, Language the releases that have texts of their own. A setting left on from
+  another release counts for nothing (the CM-32L's ROMs and the SoundFont are asked for only on their
+  releases).
+
+  The core reads each file as it is (`waterbox/files.c`): a floppy's image (`waterbox/disks.c`: FAT, .msa,
+  Pasti's .stx, AmigaDOS OFS and FFS - the core takes only the files; the protections are on tracks past the
+  file systems), a zip (and the disk images in it), the 3DO's disc (a .chd through libchdr: its first data
+  track is what rawgl reads as the disc), or a file of the game's, which goes where the game's folder has it.
+  A game on two disks is one folder to rawgl. The 15th's CD and GOG's 20th ship the game inside installers
+  (NSIS, Inno Setup), which the core does not open: an installer, and the 15th's PC CD, are refused, naming the
+  files to take out of them instead. A host that is no project's - chimera-run given a rom, the core's
+  harnesses - may still bring the game as one file, or a "game" slot of several, as before.
 
   The core unpacks the files into sealed memory at start (no savestate carries them) and reads a disc where it
   lies, a block at a time, holding nothing of the host's between two reads. The package
-  carries none of the game's data. A project without the files, a file that is none of the above, a zip with no
-  game in it, and data rawgl cannot tell are refused, saying why.
+  carries none of the game's data. A release's file missing, a release the core does not have, a file of none of
+  the kinds above, and data rawgl cannot tell are refused, saying why.
 
   | Release | The folder is recognised by | Starts at | Sound | Picture |
   |---|---|---|---|---|
@@ -75,7 +90,8 @@ the CM-32L is Munt's.
   rawgl's SDL frontend sees them - so where the game takes a press (the title, a picture it waits on), a button
   still held is not pressed again until it is let go. Jump exists on the 3DO only (`IsButtonActive`). The 3DO's
   Back key, which opens its end menu, is not offered: its "yes" stops rawgl (docs/PLAN.md).
-- **Settings**: Language, Random seed (0..65535), Difficulty (the 20th's, rawgl's `--difficulty`),
+- **Settings**: Release (the System, which the wizard's settings page does not show), Language, Random seed
+  (0..65535), Difficulty (the 20th's, rawgl's `--difficulty`),
   Remastered Sound (the anniversary editions', rawgl's `--audio`), MT-32 Sound Effects (the DOS release's,
   rawgl's `--mt32`) and SoundFont Music (Windows 3.1's).
 - **The MT-32**: with the mt32 setting, rawgl sends the DOS release's sound effects it has a note for (41 of

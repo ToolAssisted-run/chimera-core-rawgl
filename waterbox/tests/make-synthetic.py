@@ -47,18 +47,20 @@ The files go into a zip (except 3do-iso's image) the way a person would make
 one - in a folder, the names in capitals where the release has them.
 
 --container puts the DOS files on floppy disks' images instead of a zip, the
-formats the core reads directly: img (a 1.44 MB DOS disk), adf (two Amiga OFS
-disks), st, msa (packed) and stx (Pasti, a protected track and all) - the Atari
-ST's, two disks each - and zip-adf (a zip holding the two .adf); the files are
-split across the two disks with one on both, and <out> is a folder, which gets
-the images and the slot map naming them.
+formats the core reads directly, as a project brings them - each disk the
+release's firmware, under its id, and a settings file naming the release: img
+(a 1.44 MB DOS disk: dos-disk), adf (two Amiga OFS disks: amiga-en-disk1 and
+2), st, msa (packed) and stx (Pasti, a protected track and all) - the Atari
+ST's, two disks each: atari-disk1 and 2 - and zip-adf (each .adf in a zip of
+its own, as TOSEC keeps them); the files are split across the two disks with
+one on both, and <out> is a folder. rawgl tells the release by the files, so
+the DOS game runs from the Amiga's and the Atari ST's disks too.
 
 --container loose (with --release 15th) gives the 15th Anniversary Edition's
-files as they come out of its installer, without their folders - its
-Pak01.pak (named otherwise: the core knows it by its "PACK"), the intro's
-music as the European CD's Ogg (Intro2004.ogg; tests/tune.ogg), its texts'
-lang_English.Txt - and the slot map naming them, and zipped/game.zip, the same
-files in their folders.
+files as they come out of its installer, as its firmware - Pak01.pak, the
+music as the European CD's Ogg (Intro2004.ogg and End2004.ogg;
+tests/tune.ogg), its texts' lang_English.Txt - and a settings file naming the
+release, and zipped/game.zip, the same files in their folders.
 
 Two broken variants (DOS) test what a fault in the game's data does to the
 machine: --bad-opcode ends the intro on an opcode rawgl does not have (its
@@ -850,13 +852,13 @@ def loose_15th(files, out):
     import json
     os.makedirs(os.path.join(out, "zipped"), exist_ok=True)
     tune = open(os.path.join(HERE, "tune.ogg"), "rb").read()
-    raw = {"AW15.PAK": files["Data/Pak01.pak"], "Intro2004.ogg": tune,
+    raw = {"Pak01.pak": files["Data/Pak01.pak"], "Intro2004.ogg": tune, "End2004.ogg": tune,
            "lang_English.Txt": files["Menu/lang_English.Txt"]}
     for n, d in raw.items(): open(os.path.join(out, n), "wb").write(d)
-    json.dump({"game": sorted(raw)}, open(os.path.join(out, "slots"), "w"))
+    json.dump({"release": "15th"}, open(os.path.join(out, "settings"), "w"))
     with zipfile.ZipFile(os.path.join(out, "zipped", "game.zip"), "w", zipfile.ZIP_DEFLATED) as z:
-        for n, d in (("Data/Pak01.pak", raw["AW15.PAK"]), ("Music/Intro2004.ogg", tune),
-                     ("Menu/lang_English.Txt", raw["lang_English.Txt"])):
+        for n, d in (("Data/Pak01.pak", raw["Pak01.pak"]), ("Music/Intro2004.ogg", tune),
+                     ("Music/End2004.ogg", tune), ("Menu/lang_English.Txt", raw["lang_English.Txt"])):
             z.writestr(zipfile.ZipInfo("AW15/" + n, date_time=(2006, 1, 1, 0, 0, 0)), d)
 
 
@@ -872,25 +874,24 @@ def containers(kind, files, out):
     d1 = {n: files[n] for n in names[:half + 1]}           # one file on both disks
     d2 = {n: files[n] for n in names[half:]}
     if kind == "img":
-        disks = {"DISK1.IMG": fat_image(files, 2880, 1, 224, 9, 18, 2, 0xF0)}
+        release, disks = "dos", {"dos-disk": fat_image(files, 2880, 1, 224, 9, 18, 2, 0xF0)}
     elif kind == "adf" or kind == "zip-adf":
-        disks = {"Disk1.adf": adf(d1, "Disk1"), "Disk2.adf": adf(d2, "Disk2")}
+        release, disks = "amiga", {"amiga-en-disk1": adf(d1, "Disk1"), "amiga-en-disk2": adf(d2, "Disk2")}
     elif kind == "st":
-        disks = {"DISK1.ST": st_disk(d1), "DISK2.ST": st_disk(d2)}
+        release, disks = "atari", {"atari-disk1": st_disk(d1), "atari-disk2": st_disk(d2)}
     elif kind == "msa":
-        disks = {"DISK1.MSA": msa(st_disk(d1)), "DISK2.MSA": msa(st_disk(d2))}
+        release, disks = "atari", {"atari-disk1": msa(st_disk(d1)), "atari-disk2": msa(st_disk(d2))}
     elif kind == "stx":
-        disks = {"DISK1.STX": stx(st_disk(d1)), "DISK2.STX": stx(st_disk(d2))}
+        release, disks = "atari", {"atari-disk1": stx(st_disk(d1)), "atari-disk2": stx(st_disk(d2))}
     else:
         sys.exit("no such container: " + kind)
-    if kind == "zip-adf":
-        with zipfile.ZipFile(os.path.join(out, "disks.zip"), "w", zipfile.ZIP_DEFLATED) as z:
-            for n, d in disks.items(): z.writestr(n, d)
-        listed = ["disks.zip"]
-    else:
-        for n, d in disks.items(): open(os.path.join(out, n), "wb").write(d)
-        listed = sorted(disks)
-    json.dump({"game": listed}, open(os.path.join(out, "slots"), "w"))
+    for n, d in disks.items():
+        if kind == "zip-adf":
+            with zipfile.ZipFile(os.path.join(out, n), "w", zipfile.ZIP_DEFLATED) as z:
+                z.writestr("Disk%s.adf" % n[-1], d)
+        else:
+            open(os.path.join(out, n), "wb").write(d)
+    json.dump({"release": release}, open(os.path.join(out, "settings"), "w"))
 
 BUILDERS = {"dos": build_dos, "15th": build_15th, "20th": build_20th, "win31": build_win31,
             "3do": build_3do, "3do-iso": build_3do, "3do-chd": build_3do}
