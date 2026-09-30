@@ -16,11 +16,18 @@ the CM-32L is Munt's.
 
 ## What it is
 
-- **Every release rawgl plays**, from the user's own files: a project brings the game as **one file** (the
-  "game" slot) - a .zip of the game's folder, at its top or in a folder, names in any case, or the 3DO disc as it
-  is: its image (.iso) or MAME's compressed image of it (.chd, read with libchdr: its first data track is what
-  rawgl reads as the disc). The core unpacks a zip into sealed memory at start (no savestate carries it) and
-  reads a disc where it lies, a block at a time, holding nothing of the host's between two reads. The package
+- **Every release rawgl plays**, from the user's own files, **as they come** (the "game" slot):
+  - **its floppy disks' images**, all of them - the DOS PC's (.img/.ima), the Amiga's (.adf, OFS or FFS), the
+    Atari ST's (.st, .msa, .stx - Pasti's images, copy protection and all: the core takes only the files, and
+    the protection is on tracks past the file system); also inside zips, as TOSEC keeps them. The core reads
+    each disk's files (`waterbox/disks.c`) and merges them - a game on two disks is one folder to rawgl;
+  - **the 3DO disc** - MAME's compressed image of it (.chd, read with libchdr: its first data track is what
+    rawgl reads as the disc) or its image (.iso) - which comes alone;
+  - or **a .zip of the game's folder**, at its top or in a folder, names in any case (the anniversary
+    editions, Windows 3.1, or any release already copied off its disks).
+
+  The core unpacks the files into sealed memory at start (no savestate carries them) and reads a disc where it
+  lies, a block at a time, holding nothing of the host's between two reads. The package
   carries none of the game's data. A project without the file, a file that is not a zip or a disc, a zip with no
   game in it, and data rawgl cannot tell are refused, saying why.
 
@@ -85,7 +92,13 @@ rerecord, session. That proves the core's side (the files, the step, the clock, 
 savestates) on each release's formats; it does not prove the releases' own content (their scripts, their
 compressed resources - the DOS banks' ByteKiller packing, Windows 3.1's LZ-Huffman, the 3DO's LZSS and coded
 cels as the real files use them, the 15th's TooDC encoding - their copy protections, their timing). `run-gate.sh
--g <zip or iso> [-M <movie>]` runs the equivalence, rerecord and session legs on a real release.
+-g <file> [-g <file>...] [-M <movie>]` runs the equivalence, rerecord and session legs on a real release, from
+its files as a project brings them.
+
+The real releases below have also run from their disks' images as they came - the DOS floppy's .img, the two
+Amiga .adf, the two Atari ST Pasti images (bare, and in TOSEC's zips), the 3DO's .chd - each the same machine
+as its files zipped, native == sandbox, rerecord, session; and as real Chimera projects (chimera-run
+--project), the engine checking the files against the core's slot.
 
 **Out of This World (US DOS, a verified copy: GoodOldDays 000568, one 1.2 MB disk)**: the copy protection's
 screen asks for code-wheel symbols as the original does, and takes the right ones (entered with the joystick as
@@ -162,8 +175,9 @@ goes through the same path that release's files take: a copy-protection part to 
 and title), an intro with music that goes on by itself, a part the joystick plays (fire's sound, the seed's
 marker, the music's marker, the pause, Code) and a password screen. Over it: native == sandbox (every step's
 picture, sound, length and lag, the clock, the memory), a savestate before every step, a new host in the middle,
-for DOS, the 15th and 20th Anniversary Editions, Windows 3.1, the 3DO folder and the 3DO disc; the 3DO's folder
-and disc the same machine; turbo; the settings in both builds; the SoundFont changing Windows 3.1's sound and
+for DOS, the 15th and 20th Anniversary Editions, Windows 3.1, the 3DO folder, image and CHD; the 3DO's folder,
+image and CHD the same machine; the DOS game on every floppy format the core reads (a DOS .img, two .adf, two
+.st, .msa and .stx, a zip of two .adf) the same machine as its zip, native == sandbox; turbo; the settings in both builds; the SoundFont changing Windows 3.1's sound and
 nothing else; with `-r`, the DOS effects on the CM-32L (native == sandbox, rerecord, session, and only the sound
 changing), and without ROMs, or with files that are not, a refusal; the slot map; six refusals; the two halts in both builds; no host clock in the guest; teeth; and
 with `-c` the package through Chimera's own engine (chimera-run). With `-g`, the equivalence, rerecord and
@@ -177,7 +191,8 @@ generator's MIDI tune rendered by TiMidity++ with FluidR3_GM (MIT).
 - `waterbox/sdl-shim.cpp`, `waterbox/compat/`: the SDL, SDL_mixer and libmt32emu that rawgl's sources ask for:
   the music (WAV, `vorbis.c`, `midi.c`), the channels (AIFF, WAV), the mixing order, resampling.
 - `waterbox/detmath.h`: sin, cos, exp, log and pow for the decoders, the same in every build.
-- `waterbox/files.c`: the zip, the disc image, the slot map, the SoundFont and the settings. `waterbox/halt.c`: a
+- `waterbox/files.c`: the project's files (zips, disks, discs), the slot map, the SoundFont and the settings.
+  `waterbox/disks.c`: the floppy images' file systems (FAT, AmigaDOS) and containers (MSA, Pasti). `waterbox/halt.c`: a
   failed assertion halts.
 - `waterbox/wbx-entry.c`: the exports. `run-native.c`, `run-wbx.c`, `gate-harness.h`: the harnesses.
 - `waterbox/tests/`: the synthetic game and its movie.

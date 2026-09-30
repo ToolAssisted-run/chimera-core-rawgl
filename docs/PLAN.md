@@ -26,8 +26,8 @@ Started 2026-09-30, from the SDLPoP2 core's shape (the driver, the harnesses, th
 - **M6, savestates**: free - the engine's stack is guest memory (`coro.c`, MAP_STACK), the files are sealed.
   Rerecord (save and load before every step) and session (save while paused, new host, load) legs pass.
 - **M7, the package**: `waterbox.config`, keybinds, `file_slots.json`, licences; a deterministic package.
-- **The gate**: 52 legs on the synthetic game in every release's format, including the package through
-  chimera-run and (with `-r`) the CM-32L.
+- **The gate**: 69 legs on the synthetic game in every release's format and every container, including the
+  package through chimera-run and (with `-r`) the CM-32L.
 
 ## The real DOS release (2026-09-30)
 
@@ -98,6 +98,25 @@ does, where this span shows bitmaps), the sound its own.
 
 A project brings the banks as a zip. The disks themselves (.st, .msa, .stx; the Amiga's .adf; the DOS
 floppy's .img) are not taken: that would be a slot of several disks and a reader for each format in the core.
+
+## The releases as they come (2026-09-30)
+
+Sergio: "accept the disk images directly - same for the other disk-based platforms; same for 3DO: accept CHD
+directly". The game slot now takes several files, of any mix: zips, floppy images, and zips of floppy images
+(TOSEC's). `disks.c` reads a floppy's files: FAT12/16 (the DOS PC's .img/.ima, the Atari ST's .st - its boot
+sector has no 0x55AA, so the parameter block's numbers are the test), MSA (its run-length packing), Pasti
+(.stx: the ordinary sectors - 512 bytes, the track's own number, with data - into a raw image of the boot
+sector's geometry; the protection's odd sectors left out), AmigaDOS (.adf: OFS or FFS, the root in the middle
+of the disk, the hash chains). Every disk's files join one list, the first of a name kept (the Amiga's and the
+ST's two disks share banks, byte for byte); the game's folder is found in it as in a zip, and only its files are
+unpacked. A disc (.chd, .iso) is the 3DO's and comes alone. Not taken: 7-Zip archives (the DOS copy came as a
+.7z holding its .img: the .img is what a project brings) and other disk formats (IPF, DMS, raw flux).
+
+Checked: the real disks read directly are the same machines as their files zipped (DOS .img, Amiga .adf x2,
+Atari .stx x2 bare and in TOSEC's zips) - native == sandbox, rerecord, session - and load as real Chimera
+projects through chimera-run --project, the 3DO's .chd too. The synthetic DOS game is written on every format
+(a 1.44 MB .img; two .adf, .st, .msa, .stx with a protected track; a zip of the two .adf), each read with an
+independent tool as a check of the writer (mtools, the local Python readers), each the same machine as its zip.
 
 ## The real 3DO release (2026-09-30)
 

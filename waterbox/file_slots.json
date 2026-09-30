@@ -1,17 +1,23 @@
 {
-  "_comment": "An Another World project brings the game as one file - a .zip of the game's folder (the DOS release's MEMLIST.BIN and BANK files, the Amiga's or the Atari ST's BANK files, the 15th Anniversary Edition's folder with Data/Pak01.pak, the 20th's with game/, Windows 3.1's with BANK, the 3DO's with GameData/), at its top or in a folder, names in any case; or the 3DO disc as it is - its image (.iso) or MAME's compressed image of it (.chd). The core unpacks a zip at start into memory no savestate carries, and reads a disc where it lies. Windows 3.1's MIDI music is played with a SoundFont, if the project brings one.",
+  "_comment": "An Another World project brings the game as it comes: a .zip of the game's folder (the DOS release's MEMLIST.BIN and BANK files, the Amiga's or the Atari ST's BANK files, the 15th Anniversary Edition's folder with Data/Pak01.pak, the 20th's with game/, Windows 3.1's with BANK, the 3DO's with GameData/), at its top or in a folder, names in any case; its floppy disks' images, as many as it came on (a DOS disk's .img/.ima, the Amiga's .adf, the Atari ST's .st, .msa or .stx; also inside zips, as TOSEC keeps them), whose files the core reads and merges; or the 3DO disc as it is, its image (.iso) or MAME's compressed image of it (.chd), which comes alone. The core unpacks the files at start into memory no savestate carries, and reads a disc where it lies. Windows 3.1's MIDI music is played with a SoundFont, if the project brings one.",
   "slots": [
     {
       "id": "game",
       "title": "Game files",
       "min": 1,
-      "max": 1,
+      "max": -1,
       "formats": [
         "zip",
+        "adf",
+        "st",
+        "msa",
+        "stx",
+        "img",
+        "ima",
         "iso",
         "chd"
       ],
-      "help": "A .zip of Another World's folder - DOS, Amiga, Atari ST, the 15th or 20th Anniversary Edition, Windows 3.1, the 3DO's GameData - or the 3DO disc (.iso, or .chd)."
+      "help": "Another World as it comes: a .zip of the game's folder; or its floppy disks' images, all of them (DOS .img/.ima, Amiga .adf, Atari ST .st/.msa/.stx, or zips of them); or the 3DO disc (.chd or .iso) alone. Releases: DOS, Amiga, Atari ST, the 15th and 20th Anniversary Editions, Windows 3.1, 3DO."
     },
     {
       "id": "soundfont",

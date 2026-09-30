@@ -46,13 +46,20 @@ The parts (the 3DO starts at its logos and title, the anniversary editions at
 The files go into a zip (except 3do-iso's image) the way a person would make
 one - in a folder, the names in capitals where the release has them.
 
+--container puts the DOS files on floppy disks' images instead of a zip, the
+formats the core reads directly: img (a 1.44 MB DOS disk), adf (two Amiga OFS
+disks), st, msa (packed) and stx (Pasti, a protected track and all) - the Atari
+ST's, two disks each - and zip-adf (a zip holding the two .adf); the files are
+split across the two disks with one on both, and <out> is a folder, which gets
+the images and the slot map naming them.
+
 Two broken variants (DOS) test what a fault in the game's data does to the
 machine: --bad-opcode ends the intro on an opcode rawgl does not have (its
 error()), --bad-shape draws a polygon of more vertices than rawgl allows (its
 assertion). Either halts the machine; the gate checks it keeps stepping.
 
 usage: make-synthetic.py [--release dos|15th|20th|win31|3do|3do-iso|3do-chd]
-                         [--bad-opcode | --bad-shape] <out>
+                         [--container img|adf|st|msa|stx|zip-adf] [--bad-opcode | --bad-shape] <out>
 """
 
 import gzip
@@ -689,6 +696,177 @@ def chd_of_image(image):
     return bytes(out + body)
 
 
+
+# ------------------------------------------------------------ floppy disks
+
+def fat_image(files, total, spc, nroot, spf, spt, heads, media):
+    """a FAT12 disk (DOS; the Atari ST's are the same file system), the files
+    in its root, each in consecutive clusters"""
+    img = bytearray(total * 512)
+    boot = bytearray(512)
+    boot[0:3] = b"\xEB\x3C\x90"
+    boot[3:11] = b"SYNTH   "
+    struct.pack_into("<HBHBHHBHHH", boot, 11, 512, spc, 1, 2, nroot, total, media, spf, spt, heads)
+    img[0:512] = boot
+    fat = [0] * (total // spc + 2)
+    fat[0], fat[1] = 0xF00 | media, 0xFFF
+    root_off = (1 + 2 * spf) * 512
+    data_off = root_off + nroot * 32
+    cb = spc * 512
+    nxt = 2
+    for i, (name, body) in enumerate(sorted(files.items())):
+        n = max(1, (len(body) + cb - 1) // cb)
+        first = nxt
+        for k in range(n):
+            fat[nxt + k] = (nxt + k + 1) if k < n - 1 else 0xFFF
+        nxt += n
+        o = data_off + (first - 2) * cb
+        img[o:o + len(body)] = body
+        base, _, ext = name.partition(".")
+        e = bytearray(32)
+        e[0:8] = base.upper().ljust(8).encode()
+        e[8:11] = ext.upper().ljust(3).encode()
+        e[11] = 0x20
+        struct.pack_into("<HI", e, 26, first, len(body))
+        img[root_off + i * 32:root_off + i * 32 + 32] = e
+    tab = bytearray(spf * 512)
+    for c in range(len(fat)):
+        o = c * 3 // 2
+        if o + 1 >= len(tab): break
+        v = fat[c] & 0xFFF
+        if c & 1:
+            tab[o] = (tab[o] & 0x0F) | ((v << 4) & 0xF0); tab[o + 1] = v >> 4
+        else:
+            tab[o] = v & 0xFF; tab[o + 1] = (tab[o + 1] & 0xF0) | (v >> 8)
+    for k in range(2):
+        img[512 + k * spf * 512:512 + (k + 1) * spf * 512] = tab
+    return bytes(img)
+
+
+def st_disk(files):
+    # an Atari ST double-sided disk: 80 tracks, 2 sides, 9 sectors
+    return fat_image(files, 1440, 2, 112, 3, 9, 2, 0xF9)
+
+
+def msa(raw, spt=9, sides=2):
+    """MSA: the tracks one by one, each packed (0xE5 runs) when that is shorter"""
+    tracks = len(raw) // (spt * 512 * sides)
+    out = bytearray(struct.pack(">HHHHH", 0x0E0F, spt, sides - 1, 0, tracks - 1))
+    for t in range(tracks * sides):
+        tr = raw[t * spt * 512:(t + 1) * spt * 512]
+        packed = bytearray()
+        i = 0
+        while i < len(tr):
+            j = i
+            while j < len(tr) and tr[j] == tr[i] and j - i < 0xFFFF: j += 1
+            if j - i >= 5 or tr[i] == 0xE5:
+                packed += bytes([0xE5, tr[i]]) + struct.pack(">H", j - i); i = j
+            else:
+                packed.append(tr[i]); i += 1
+        body = packed if len(packed) < len(tr) else tr
+        out += struct.pack(">H", len(body)) + body
+    return bytes(out)
+
+
+def stx(raw, spt=9, sides=2):
+    """Pasti: a record a track, its sectors described; and past the file
+    system a protected track - an 1024-byte sector, a sector of another
+    track's number, a sector without data - which the core leaves alone"""
+    tracks = len(raw) // (spt * 512 * sides)
+    recs = []
+    for c in range(tracks + 2):
+        for h in range(sides):
+            descs, data = bytearray(), bytearray()
+            if c < tracks:
+                for sct in range(spt):
+                    o = ((c * sides + h) * spt + sct) * 512
+                    descs += struct.pack("<IHHBBBBHBB", len(data), 0, 0, c, h, sct + 1, 2, 0, 0, 0)
+                    data += raw[o:o + 512]
+            else:
+                for sct, (idt, size, fdc) in enumerate([(c, 3, 0), (c + 5, 2, 0), (c, 2, 0x10)]):
+                    descs += struct.pack("<IHHBBBBHBB", len(data), 0, 0, idt, h, sct + 1, size, 0, fdc, 0)
+                    if not fdc & 0x10: data += bytes([0x5A]) * (128 << size)
+            n = len(descs) // 16
+            recs.append(struct.pack("<IIHHHBB", 16 + len(descs) + len(data), 0, n, 0x01, 6250, c | (h << 7), 0) + descs + data)
+    return b"RSY\0" + struct.pack("<HHHBBI", 3, 1, 0, len(recs), 2, 0) + b"".join(recs)
+
+
+def adf(files, label):
+    """an Amiga OFS disk: the boot block, the root at block 880, a header
+    block and OFS data blocks a file; hash chains as AmigaDOS makes them"""
+    B, N = 512, 1760
+    blocks = [bytearray(B) for _ in range(N)]
+    blocks[0][0:4] = b"DOS\0"
+    root = blocks[880]
+    def name_to(b, name):
+        b[B - 80] = len(name); b[B - 79:B - 79 + len(name)] = name.encode()
+    def hashname(name):
+        h = len(name)
+        for ch in name.upper(): h = (h * 13 + ord(ch)) & 0x7FF
+        return h % 72
+    def checksum(b, at=20):
+        struct.pack_into(">I", b, at, 0)
+        struct.pack_into(">I", b, at, (-sum(struct.unpack(">128I", bytes(b)))) & 0xFFFFFFFF)
+    struct.pack_into(">III", root, 0, 2, 0, 0)
+    struct.pack_into(">I", root, 12, 72)
+    struct.pack_into(">i", root, B - 4, 1)
+    name_to(root, label)
+    free = 882
+    for name, body in sorted(files.items()):
+        hdr_n = free; free += 1
+        hdr = blocks[hdr_n]
+        chunks = [body[i:i + 488] for i in range(0, len(body), 488)] or [b""]
+        assert len(chunks) <= 72, "one header block only"
+        data_ns = list(range(free, free + len(chunks))); free += len(chunks)
+        struct.pack_into(">IIII", hdr, 0, 2, hdr_n, len(chunks), 0)
+        struct.pack_into(">I", hdr, 16, data_ns[0])
+        for k, dn in enumerate(data_ns):
+            struct.pack_into(">I", hdr, B - 204 - k * 4, dn)
+            d = blocks[dn]
+            struct.pack_into(">IIIII", d, 0, 8, hdr_n, k + 1, len(chunks[k]), data_ns[k + 1] if k + 1 < len(data_ns) else 0)
+            d[24:24 + len(chunks[k])] = chunks[k]
+            checksum(d)
+        struct.pack_into(">I", hdr, B - 188, len(body))
+        name_to(hdr, name)
+        struct.pack_into(">I", hdr, B - 12, 880)
+        struct.pack_into(">i", hdr, B - 4, -3)
+        slot = 24 + hashname(name) * 4
+        struct.pack_into(">I", hdr, B - 16, struct.unpack_from(">I", root, slot)[0])
+        struct.pack_into(">I", root, slot, hdr_n)
+        checksum(hdr)
+    checksum(root)
+    return b"".join(bytes(b) for b in blocks)
+
+
+def containers(kind, files, out):
+    """the DOS files on floppy images in folder `out`, and its slot map"""
+    import json
+    os.makedirs(out, exist_ok=True)
+    names = sorted(files)
+    half = len(names) // 2
+    d1 = {n: files[n] for n in names[:half + 1]}           # one file on both disks
+    d2 = {n: files[n] for n in names[half:]}
+    if kind == "img":
+        disks = {"DISK1.IMG": fat_image(files, 2880, 1, 224, 9, 18, 2, 0xF0)}
+    elif kind == "adf" or kind == "zip-adf":
+        disks = {"Disk1.adf": adf(d1, "Disk1"), "Disk2.adf": adf(d2, "Disk2")}
+    elif kind == "st":
+        disks = {"DISK1.ST": st_disk(d1), "DISK2.ST": st_disk(d2)}
+    elif kind == "msa":
+        disks = {"DISK1.MSA": msa(st_disk(d1)), "DISK2.MSA": msa(st_disk(d2))}
+    elif kind == "stx":
+        disks = {"DISK1.STX": stx(st_disk(d1)), "DISK2.STX": stx(st_disk(d2))}
+    else:
+        sys.exit("no such container: " + kind)
+    if kind == "zip-adf":
+        with zipfile.ZipFile(os.path.join(out, "disks.zip"), "w", zipfile.ZIP_DEFLATED) as z:
+            for n, d in disks.items(): z.writestr(n, d)
+        listed = ["disks.zip"]
+    else:
+        for n, d in disks.items(): open(os.path.join(out, n), "wb").write(d)
+        listed = sorted(disks)
+    json.dump({"game": listed}, open(os.path.join(out, "slots"), "w"))
+
 BUILDERS = {"dos": build_dos, "15th": build_15th, "20th": build_20th, "win31": build_win31,
             "3do": build_3do, "3do-iso": build_3do, "3do-chd": build_3do}
 
@@ -696,9 +874,12 @@ BUILDERS = {"dos": build_dos, "15th": build_15th, "20th": build_20th, "win31": b
 def main():
     global RELEASE, BROKEN
     args = sys.argv[1:]
+    container = None
     while args and args[0].startswith("--"):
         opt = args.pop(0)
-        if opt == "--release" and args:
+        if opt == "--container" and args:
+            container = args.pop(0)
+        elif opt == "--release" and args:
             RELEASE = args.pop(0)
             if RELEASE not in BUILDERS:
                 sys.exit("no such release: " + RELEASE)
@@ -709,6 +890,9 @@ def main():
     if len(args) != 1:
         sys.exit(__doc__)
     files = BUILDERS[RELEASE]()
+    if container:
+        containers(container, files, args[0])
+        return
     if RELEASE == "3do-iso":
         open(args[0], "wb").write(opera_iso(files))
         return

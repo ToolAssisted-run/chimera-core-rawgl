@@ -39,6 +39,7 @@
 #include <libchdr/cdrom.h>
 #include <libchdr/chd.h>
 
+#include "disks.h"
 #include "miniz.h"
 #include "rawgl-files.h"
 
@@ -257,6 +258,73 @@ static int is_opera_image(const uint8_t *buf)
 	return buf[0] == 1 && !memcmp(buf + 40, "CD-ROM", 6);
 }
 
+/* ------------------------------------------------------------ the project's files
+ *
+ * The files the project brings - zips, disk images (disks.c), disk images in
+ * zips - make one list of candidates, the first of a name kept (a file two
+ * disks both carry is the same file); the game's folder is found in it, and
+ * only that folder's files are read into sealed memory. A disc (.chd, .iso)
+ * is the 3DO's and comes alone. */
+
+struct cand
+{
+	char path[256];
+	int zip;           /* the zip it is in, or -1: a disk's file, in data */
+	mz_uint entry;
+	uint8_t *data;
+	uint32_t size;
+};
+
+#define MAX_ZIPS 16
+static struct
+{
+	FILE *f;
+	mz_zip_archive za;
+	char name[256];
+} g_zips[MAX_ZIPS];
+static int g_nzips;
+static struct cand *g_cands;
+static int g_ncands, g_capcands;
+
+static void add_cand(const char *path, int zip, mz_uint entry, const uint8_t *data, uint32_t size)
+{
+	if (strlen(path) >= sizeof g_cands[0].path) return;
+	for (int i = 0; i < g_ncands; i++)
+		if (!strcasecmp(g_cands[i].path, path)) return;
+	if (g_ncands == g_capcands)
+	{
+		g_capcands = g_capcands ? g_capcands * 2 : 64;
+		g_cands = realloc(g_cands, (size_t)g_capcands * sizeof *g_cands);
+	}
+	struct cand *c = &g_cands[g_ncands++];
+	snprintf(c->path, sizeof c->path, "%s", path);
+	c->zip = zip;
+	c->entry = entry;
+	c->size = size;
+	c->data = NULL;
+	if (data)
+	{
+		c->data = malloc(size ? size : 1);
+		memcpy(c->data, data, size);
+	}
+}
+
+static void disk_file(void *ctx, const char *path, const uint8_t *data, uint32_t size)
+{
+	(void)ctx;
+	add_cand(path, -1, 0, data, size);
+}
+
+static int is_disk_name(const char *n)
+{
+	static const char *const exts[] = { ".adf", ".st", ".msa", ".stx", ".img", ".ima", ".dsk" };
+	for (size_t i = 0; i < sizeof exts / sizeof exts[0]; i++)
+		if (ends_with_ci(n, exts[i])) return 1;
+	return 0;
+}
+
+#define MAX_DISK (4u << 20)
+
 /* the zip is read from its file as miniz asks, never whole: only what it
  * unpacks takes memory */
 static size_t zip_read(void *opaque, mz_uint64 ofs, void *buf, size_t n)
@@ -266,30 +334,103 @@ static size_t zip_read(void *opaque, mz_uint64 ofs, void *buf, size_t n)
 	return fread(buf, 1, n, f);
 }
 
-static int load_zip(FILE *zf, long zip_size, char *err, int errsize)
+static int add_zip(const char *name, long size, char *err, int errsize)
 {
-	mz_zip_archive za;
-	memset(&za, 0, sizeof za);
-	za.m_pRead = zip_read;
-	za.m_pIO_opaque = zf;
-	if (!mz_zip_reader_init(&za, (mz_uint64)zip_size, 0))
+	if (g_nzips == MAX_ZIPS)
 	{
-		snprintf(err, (size_t)errsize, "%s is not a zip file: the game's files come as a .zip of its folder, or the 3DO disc's image (.iso)", g_zip_name);
+		snprintf(err, (size_t)errsize, "too many zips in the project (%d at most)", MAX_ZIPS);
 		return 0;
 	}
-	const int n = (int)mz_zip_reader_get_num_files(&za);
-
-	/* the game's folder: where the shallowest marker is */
-	char root[256] = "";
-	int best = 1 << 30, found = 0;
+	const int z = g_nzips;
+	g_zips[z].f = fopen(name, "rb");
+	snprintf(g_zips[z].name, sizeof g_zips[z].name, "%.255s", name);
+	memset(&g_zips[z].za, 0, sizeof g_zips[z].za);
+	g_zips[z].za.m_pRead = zip_read;
+	g_zips[z].za.m_pIO_opaque = g_zips[z].f;
+	if (!g_zips[z].f || !mz_zip_reader_init(&g_zips[z].za, (mz_uint64)size, 0))
+	{
+		if (g_zips[z].f) fclose(g_zips[z].f);
+		snprintf(err, (size_t)errsize, "%s is not a zip file", name);
+		return 0;
+	}
+	g_nzips++;
+	const int n = (int)mz_zip_reader_get_num_files(&g_zips[z].za);
 	for (int i = 0; i < n; i++)
 	{
 		mz_zip_archive_file_stat st;
-		if (!mz_zip_reader_file_stat(&za, (mz_uint)i, &st) || st.m_is_directory) continue;
-		const int r = marker_root(st.m_filename);
+		if (!mz_zip_reader_file_stat(&g_zips[z].za, (mz_uint)i, &st) || st.m_is_directory) continue;
+		if (st.m_uncomp_size > 0xFFFFFFF0u)
+		{
+			snprintf(err, (size_t)errsize, "%s in %s is too large (%llu bytes)", st.m_filename, name, (unsigned long long)st.m_uncomp_size);
+			return 0;
+		}
+		/* a disk image in the zip (TOSEC's come so): its files */
+		if (is_disk_name(st.m_filename) && st.m_uncomp_size <= MAX_DISK)
+		{
+			uint8_t *img = malloc(st.m_uncomp_size ? (size_t)st.m_uncomp_size : 1);
+			if (img && mz_zip_reader_extract_to_mem(&g_zips[z].za, (mz_uint)i, img, (size_t)st.m_uncomp_size, 0)
+				&& disk_kind(img, (size_t)st.m_uncomp_size))
+			{
+				if (!disk_read(img, (size_t)st.m_uncomp_size, disk_file, NULL))
+				{
+					snprintf(err, (size_t)errsize, "%s in %s is a disk image the core could not read", st.m_filename, name);
+					free(img);
+					return 0;
+				}
+				free(img);
+				continue;
+			}
+			free(img);
+		}
+		add_cand(st.m_filename, z, (mz_uint)i, NULL, (uint32_t)st.m_uncomp_size);
+	}
+	return 1;
+}
+
+static int add_disk(const char *name, long size, char *err, int errsize)
+{
+	if (size <= 0 || (unsigned long)size > MAX_DISK) return 0;
+	FILE *f = fopen(name, "rb");
+	if (!f) return 0;
+	uint8_t *img = malloc((size_t)size);
+	const size_t got = fread(img, 1, (size_t)size, f);
+	fclose(f);
+	int ok = 0;
+	if (got == (size_t)size && disk_kind(img, (size_t)size))
+	{
+		ok = disk_read(img, (size_t)size, disk_file, NULL);
+		if (!ok) snprintf(err, (size_t)errsize, "%s is a %s disk image the core could not read", name, disk_kind(img, (size_t)size));
+		else ok = 1;
+	}
+	free(img);
+	return ok;
+}
+
+static void release_sources(void)
+{
+	for (int z = 0; z < g_nzips; z++)
+	{
+		mz_zip_reader_end(&g_zips[z].za);
+		fclose(g_zips[z].f);
+	}
+	g_nzips = 0;
+	for (int i = 0; i < g_ncands; i++) free(g_cands[i].data);
+	free(g_cands);
+	g_cands = NULL;
+	g_ncands = g_capcands = 0;
+}
+
+/* the game's folder, out of the candidates, into sealed memory */
+static int settle(char *err, int errsize)
+{
+	char root[256] = "";
+	int best = 1 << 30, found = 0;
+	for (int i = 0; i < g_ncands; i++)
+	{
+		const int r = marker_root(g_cands[i].path);
 		if (r < 0) continue;
 		char folder[256];
-		snprintf(folder, sizeof folder, "%.*s", r, st.m_filename);
+		snprintf(folder, sizeof folder, "%.*s", r, g_cands[i].path);
 		const int d = depth(folder);
 		if (d < best)
 		{
@@ -300,106 +441,126 @@ static int load_zip(FILE *zf, long zip_size, char *err, int errsize)
 	}
 	if (!found)
 	{
-		snprintf(err, (size_t)errsize, "%s holds no Another World data: the game's folder has MEMLIST.BIN and the BANK files (DOS), the BANK files (Amiga, Atari ST), Data/Pak01.pak (15th Anniversary), game/ (20th Anniversary), BANK and WORLD.EXE (Windows 3.1) or GameData/ (3DO)", g_zip_name);
-		mz_zip_reader_end(&za);
+		snprintf(err, (size_t)errsize, "the project's files hold no Another World data: the game's folder (a zip of it, or its disks' images) has MEMLIST.BIN and the BANK files (DOS), the BANK files (Amiga, Atari ST), Data/Pak01.pak (15th Anniversary), game/ (20th Anniversary), BANK and WORLD.EXE (Windows 3.1) or GameData/ (3DO)");
 		return 0;
 	}
-
 	const size_t rootlen = strlen(root);
-	g_files = calloc((size_t)n, sizeof *g_files);
-	for (int i = 0; i < n; i++)
+	g_files = calloc((size_t)g_ncands, sizeof *g_files);
+	for (int i = 0; i < g_ncands; i++)
 	{
-		mz_zip_archive_file_stat st;
-		if (!mz_zip_reader_file_stat(&za, (mz_uint)i, &st) || st.m_is_directory) continue;
-		if (strncmp(st.m_filename, root, rootlen) != 0 || strlen(st.m_filename + rootlen) >= sizeof g_files[0].path) continue;
-		if (skipped(st.m_filename + rootlen)) continue;
-		if (st.m_uncomp_size > 0xFFFFFFF0u)
+		const struct cand *c = &g_cands[i];
+		if (strncmp(c->path, root, rootlen) != 0 || skipped(c->path + rootlen)) continue;
+		uint8_t *data = alloc_sealed(c->size ? c->size : 1);
+		int ok = data != NULL;
+		if (ok)
 		{
-			snprintf(err, (size_t)errsize, "%s in %s is too large (%llu bytes)", st.m_filename, g_zip_name, (unsigned long long)st.m_uncomp_size);
-			mz_zip_reader_end(&za);
-			return 0;
+			if (c->zip >= 0) ok = mz_zip_reader_extract_to_mem(&g_zips[c->zip].za, c->entry, data, c->size, 0);
+			else memcpy(data, c->data, c->size);
 		}
-		uint8_t *data = alloc_sealed(st.m_uncomp_size ? (size_t)st.m_uncomp_size : 1);
-		if (!data || !mz_zip_reader_extract_to_mem(&za, (mz_uint)i, data, (size_t)st.m_uncomp_size, 0))
+		if (!ok)
 		{
-			snprintf(err, (size_t)errsize, "%s in %s could not be unpacked%s", st.m_filename, g_zip_name, data ? "" : " (out of memory)");
-			mz_zip_reader_end(&za);
+			snprintf(err, (size_t)errsize, "%s could not be unpacked%s", c->path, data ? "" : " (out of memory)");
 			return 0;
 		}
 		struct gfile *g = &g_files[g_nfiles++];
-		snprintf(g->path, sizeof g->path, "%s", st.m_filename + rootlen);
+		snprintf(g->path, sizeof g->path, "%s", c->path + rootlen);
 		g->data = data;
-		g->size = (uint32_t)st.m_uncomp_size;
-		/* a disc image in the zip is the data path (rawgl opens it as one) */
+		g->size = c->size;
+		/* a disc image in a zip is the data path (rawgl opens it as one) */
 		if (ends_with_ci(g->path, ".iso") && !strchr(g->path, '/') && g->size >= 128 && is_opera_image(g->data))
 			snprintf(g_data_dir, sizeof g_data_dir, "%s", g->path);
 	}
-	mz_zip_reader_end(&za);
+	return 1;
+}
+
+/* a disc - the 3DO's .chd or .iso - read in place */
+static int open_disc(const char *name, const uint8_t *head, long size, char *err, int errsize)
+{
+	snprintf(g_zip_name, sizeof g_zip_name, "%.255s", name);
+	snprintf(g_host_name, sizeof g_host_name, "%.255s", name);
+	if (!memcmp(head, "MComprHD", 8))
+	{
+		/* a compressed disc: the engine is told its data track is an .iso */
+		if (!open_chd(err, errsize)) return 0;
+		uint8_t sector0[128];
+		if (chd_read_sectors(0, sector0, sizeof sector0) != sizeof sector0 || !is_opera_image(sector0))
+		{
+			snprintf(err, (size_t)errsize, "%s is a CD, but not a 3DO disc (its first sector is not an Opera file system's)", name);
+			return 0;
+		}
+		g_has_host = 2;
+	}
+	else
+	{
+		g_host_size = (uint32_t)size;
+		g_has_host = 1;
+	}
+	snprintf(g_host_path, sizeof g_host_path, "game.iso");
+	snprintf(g_data_dir, sizeof g_data_dir, "%s", g_host_path);
 	return 1;
 }
 
 int rawgl_files_load(char *err, int errsize)
 {
-	/* the project's slot map names the file; without one, a host that is not a
-	 * project's mounts it as "rom" (chimera-run <package> <rom>), and the
-	 * core's harnesses as game.zip, or game.iso */
+	/* the project's slot map names the files; without one, a host that is not
+	 * a project's mounts one as "rom" (chimera-run <package> <rom>), and the
+	 * core's harnesses as game.zip, game.iso or game.chd (several disks: with
+	 * a "slots" file) */
 	static const char *const fallbacks[] = { "rom", "game.zip", "game.iso", "game.chd" };
-	uint8_t head[128];
-	long size = -1;
-	const int from_slot = wbx_slot_name("game", 0, g_zip_name, (int)sizeof g_zip_name) != NULL;
-	if (from_slot)
-		size = peek(g_zip_name, head, sizeof head);
-	else
-		for (size_t i = 0; i < sizeof fallbacks / sizeof fallbacks[0] && size < 0; i++)
+	char names[8][256];
+	int count = 0;
+	while (count < 8 && wbx_slot_name("game", count, names[count], (int)sizeof names[0])) count++;
+	const int from_slot = count > 0;
+	if (!from_slot)
+		for (size_t i = 0; i < sizeof fallbacks / sizeof fallbacks[0]; i++)
 		{
-			snprintf(g_zip_name, sizeof g_zip_name, "%s", fallbacks[i]);
-			size = peek(g_zip_name, head, sizeof head);
+			uint8_t h[4];
+			if (peek(fallbacks[i], h, sizeof h) >= 0)
+			{
+				snprintf(names[0], sizeof names[0], "%s", fallbacks[i]);
+				count = 1;
+				break;
+			}
 		}
-	if (size < 0)
+	if (!count)
 	{
-		if (from_slot)
-			snprintf(err, (size_t)errsize, "Another World needs the game's files: %s, the project's game file, is not there", g_zip_name);
-		else
-			snprintf(err, (size_t)errsize, "Another World needs the game's files: add a .zip of the game's folder (or the 3DO disc's .iso) to the project");
+		snprintf(err, (size_t)errsize, "Another World needs the game's files: add a .zip of the game's folder, its disks' images, or the 3DO disc (.chd, .iso) to the project");
 		return 0;
 	}
 
-	if (size >= 16 && !memcmp(head, "MComprHD", 8))
+	int ok = 1;
+	for (int i = 0; i < count && ok; i++)
 	{
-		/* a compressed disc: the engine is told its data track is an .iso */
-		snprintf(g_host_name, sizeof g_host_name, "%s", g_zip_name);
-		if (!open_chd(err, errsize)) return 0;
-		uint8_t sector0[128];
-		if (chd_read_sectors(0, sector0, sizeof sector0) != sizeof sector0 || !is_opera_image(sector0))
+		uint8_t head[128];
+		const long size = peek(names[i], head, sizeof head);
+		snprintf(g_zip_name, sizeof g_zip_name, "%.255s", names[i]);
+		if (size < 0)
 		{
-			snprintf(err, (size_t)errsize, "%s is a CD, but not a 3DO disc (its first sector is not an Opera file system's)", g_zip_name);
-			return 0;
+			snprintf(err, (size_t)errsize, "Another World needs the game's files: %s, one of the project's, is not there", names[i]);
+			ok = 0;
 		}
-		snprintf(g_host_path, sizeof g_host_path, "game.iso");
-		snprintf(g_data_dir, sizeof g_data_dir, "%s", g_host_path);
-		g_has_host = 2;
-		return 1;
+		else if ((size >= 16 && !memcmp(head, "MComprHD", 8)) || (size >= 128 && is_opera_image(head)))
+		{
+			if (count > 1)
+			{
+				snprintf(err, (size_t)errsize, "%s is the 3DO's disc, which comes alone: the project has %d files", names[i], count);
+				ok = 0;
+			}
+			else ok = open_disc(names[i], head, size, err, errsize);
+			release_sources();
+			return ok;
+		}
+		else if (size >= 4 && head[0] == 'P' && head[1] == 'K' && (head[2] == 3 || head[2] == 5))
+			ok = add_zip(names[i], size, err, errsize);
+		else if (!add_disk(names[i], size, err, errsize))
+		{
+			if (!err[0])
+				snprintf(err, (size_t)errsize, "%s is not a zip, a disk image the core reads (DOS or Atari ST FAT, .msa, .stx, the Amiga's .adf) or the 3DO's disc (.chd, .iso)", names[i]);
+			ok = 0;
+		}
 	}
-
-	if (size >= 128 && is_opera_image(head))
-	{
-		/* the 3DO disc, read where it is; the engine is told its name ends in .iso */
-		snprintf(g_host_name, sizeof g_host_name, "%s", g_zip_name);
-		snprintf(g_host_path, sizeof g_host_path, "game.iso");
-		snprintf(g_data_dir, sizeof g_data_dir, "%s", g_host_path);
-		g_host_size = (uint32_t)size;
-		g_has_host = 1;
-		return 1;
-	}
-
-	FILE *zf = fopen(g_zip_name, "rb");
-	if (!zf)
-	{
-		snprintf(err, (size_t)errsize, "%s could not be read", g_zip_name);
-		return 0;
-	}
-	const int ok = load_zip(zf, size, err, errsize);
-	fclose(zf);
+	if (ok) ok = settle(err, errsize);
+	release_sources();
 	return ok;
 }
 

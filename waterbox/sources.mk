@@ -90,9 +90,9 @@ CHDR_CFLAGS_COMMON := -std=gnu11 -O2 -DNDEBUG $(CHDR_DEFS) -I$(CHDR)/include -I$
 # deterministic math (detmath.h)
 
 # ---- the core
-CORE_C_NAMES := coro files halt midi vorbis wbx-entry
+CORE_C_NAMES := coro disks files halt midi vorbis wbx-entry
 CORE_CXX_NAMES := rawgl-driver sdl-shim
-CORE_HDRS := rawgl-driver.h rawgl-files.h rawgl-audio.h coro.h midi.h detmath.h $(MUNT_CONFIG) $(wildcard compat/*.h) $(wildcard $(RAWGL)/*.h)
+CORE_HDRS := disks.h rawgl-driver.h rawgl-files.h rawgl-audio.h coro.h midi.h detmath.h $(MUNT_CONFIG) $(wildcard compat/*.h) $(wildcard $(RAWGL)/*.h)
 CORE_CFLAGS_COMMON := -std=gnu11 -O2 -Icompat -I$(MINIZ) $(MINIZ_DEFS) -I$(STB) -I$(TSF) -I$(CHDR)/include
 CORE_CXXFLAGS_COMMON := $(RAWGL_CXXFLAGS_COMMON) -I$(STB)
 

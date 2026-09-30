@@ -16,6 +16,10 @@
 #                session, each; the 3DO's folder, image and CHD the same
 #                machine; Jump the 3DO's only; the SoundFont changes Windows 3.1's sound and
 #                nothing else
+#   disks        the synthetic DOS game on floppy images the core reads as they
+#                are - a DOS .img, two Amiga .adf, two Atari ST .st, .msa and
+#                .stx (a protected track and all), a zip of the two .adf -
+#                each the same machine as the zip, native = sandbox
 #   settings     randomSeed is what the script's seed starts at, language what
 #                the DOS copy protection's title choice reads, difficulty and
 #                remasteredAudio what the anniversary editions read (both
@@ -40,8 +44,8 @@
 # usage: run-gate.sh [-m <miniBox dir>] [-g <Another World zip or iso> [-M <movie>]] [-f <frames>]
 #                    [-c <chimera-run>] [-r <ROM dir>]
 #   -g adds the equivalence, rerecord and session legs on a real release (the
-#      zip of the game's folder, or the 3DO's disc - .iso or .chd - as a project
-#      would bring it;
+#      zip of the game's folder, its disks' images - -g once for each - or the
+#      3DO's disc, .iso or .chd, as a project would bring them;
 #      not in the repo): 2000 steps from power-on, or the steps of the movie -M
 #      names (a movie of your own, kept out of the repo)
 #   -c runs the engine leg with that chimera-run (build/dll/chimera-run of a
@@ -61,7 +65,8 @@ game_movie=""
 while getopts "m:g:f:c:r:M:" opt; do
 	case "$opt" in
 		m) mb="$OPTARG" ;;
-		g) game="$OPTARG" ;;
+		g) game="${game:+$game
+}$OPTARG" ;;
 		f) frames="$OPTARG" ;;
 		c) chimera_run="$OPTARG" ;;
 		r) roms="$OPTARG" ;;
@@ -178,6 +183,18 @@ else
 	fail "releases (win31): the SoundFont changed more than the sound, or nothing"
 fi
 
+echo "== disks"
+for c in img adf st msa stx zip-adf; do
+	d="$work/disks-$c"
+	python3 "$here/tests/make-synthetic.py" --container $c "$d"
+	digest_run native "$d" "$frames" "$movie" > "$d/n"
+	digest_run wbx "$d" "$frames" "$movie" > "$d/w"
+	same "disks ($c)" "$d/n" "$work/n.txt" "$(ls "$d" | grep -v '^slots$' | grep -v '^[nw]' | tr '\n' ' ')= the zipped folder"
+	same "disks ($c)" "$d/w" "$d/n" "native = sandbox"
+done
+digest_run wbx "$work/disks-adf" "$frames" "$movie" --session-at "$at" > "$work/disks-adf/s"
+same "disks (adf)" "$work/disks-adf/s" "$work/disks-adf/w" "session at step $at = straight"
+
 echo "== settings"
 mkgame seed
 printf '{"randomSeed": 200, "language": "fr"}' > "$work/seed/settings"
@@ -286,7 +303,7 @@ refuse() { # refuse <dir> <expected text> <what>
 mkdir -p "$work/empty" "$work/notzip" "$work/nodata" "$work/unknown" "$work/badpak" "$work/badseed"
 refuse empty "needs the game's files" "no zip"
 echo "not a zip" > "$work/notzip/game.zip"
-refuse notzip "is not a zip file" "not a zip"
+refuse notzip "is not a zip, a disk image" "not a zip, a disk image or a disc"
 python3 - "$work" <<'PY'
 import sys, zipfile
 w = sys.argv[1]
@@ -297,7 +314,7 @@ with zipfile.ZipFile(w + "/unknown/game.zip", "w") as z:
 with zipfile.ZipFile(w + "/badpak/game.zip", "w") as z:
     z.writestr("AW15/Data/Pak01.pak", b"\0" * 16)   # not a PACK
 PY
-refuse nodata "holds no Another World data" "no game in the zip"
+refuse nodata "hold no Another World data" "no game in the zip"
 refuse unknown "No data files found" "a BANK01 of no known release (rawgl's own error, at Init)"
 refuse badpak "No data files found" "a 15th Anniversary Edition's Pak01.pak that is not one (rawgl's own error, at Init)"
 cp "$work/synth/game.zip" "$work/badseed/game.zip"
@@ -359,13 +376,17 @@ PY
 fi
 
 if [ -n "$game" ]; then
-	echo "== Another World ($game${game_movie:+, $game_movie})"
+	echo "== Another World ($(echo "$game" | tr '\n' ' ')${game_movie:+, $game_movie})"
 	mkdir -p "$work/game"
-	case "$game" in
-		*.iso|*.ISO) cp "$game" "$work/game/game.iso" ;;
-		*.chd|*.CHD) cp "$game" "$work/game/game.chd" ;;
-		*) cp "$game" "$work/game/game.zip" ;;
-	esac
+	# the files under their own names, and a slot map naming them, as a
+	# project mounts them
+	slots='{"game": ['
+	sep=''
+	echo "$game" | while IFS= read -r f; do cp "$f" "$work/game/$(basename "$f")"; done
+	while IFS= read -r f; do slots="$slots$sep\"$(basename "$f")\""; sep=', '; done <<GAMES
+$game
+GAMES
+	printf '%s]}' "$slots" > "$work/game/slots"
 	gn=2000
 	gm=""
 	if [ -n "$game_movie" ]; then
