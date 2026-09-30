@@ -1,8 +1,8 @@
 /* files.c - the game's data files, out of the project's file, and the settings.
  *
  * A project brings Another World as one file (the "game" slot,
- * file_slots.json): a .zip of the game's folder, or the 3DO release's disc
- * image (.iso) as it is.
+ * file_slots.json): a .zip of the game's folder, or the 3DO release's disc -
+ * its image (.iso) or MAME's compressed image of it (.chd) - as it is.
  *
  *   - A zip is unpacked once, at Init, into sealed memory - read-only after
  *     Init, and so never part of a savestate - and the engine's every open
@@ -14,11 +14,13 @@
  *     Data/Pak01.pak (the 15th Anniversary Edition), game/DAT/FILE017.DAT (the
  *     20th), BANK (Windows 3.1) or GameData/File340 (3DO), or a disc image.
  *     Names are matched without regard to case, as rawgl does on disk.
- *   - A disc image is too large to copy for nothing: it is read where it is
- *     mounted (rawgl_memfs_host_read), each read opening, reading and closing
- *     it, so no host handle or file position outlives a call - miniBox's
- *     savestates carry the machine's memory, not the host's open files. What
- *     it keeps between reads, a cache of the last 64 KiB, is guest memory.
+ *   - A disc is too large to copy for nothing: it is read where it is mounted
+ *     (rawgl_memfs_host_read), each read opening, reading and closing it, so
+ *     no host handle or file position outlives a call - miniBox's savestates
+ *     carry the machine's memory, not the host's open files. What it keeps
+ *     between reads is guest memory: a cache of the last 64 KiB of an image,
+ *     or of a .chd the last hunk libchdr decompressed. Of a .chd, rawgl sees
+ *     the first data track's 2048-byte sectors, as an image holds them.
  *
  * The engine's data path is "." for a folder, or the image's name (rawgl
  * opens an .iso it is given as its data path, resource_3do.cpp).
@@ -33,6 +35,9 @@
 #include <emulibc.h>
 #include <waterbox_settings.h>
 #include <waterbox_slots.h>
+
+#include <libchdr/cdrom.h>
+#include <libchdr/chd.h>
 
 #include "miniz.h"
 #include "rawgl-files.h"
@@ -49,7 +54,7 @@ static int g_nfiles;
 static char g_zip_name[256];
 static char g_data_dir[256] = ".";
 
-/* the disc image, read in place */
+/* the disc, read in place: an image, or a .chd */
 static char g_host_name[256];     /* its mount */
 static char g_host_path[256];     /* what the engine calls it */
 static uint32_t g_host_size;
@@ -57,6 +62,15 @@ static int g_has_host;
 #define HOST_CACHE 65536
 static uint8_t g_host_cache[HOST_CACHE];
 static uint32_t g_host_cache_pos, g_host_cache_len;
+
+/* a .chd: libchdr over the mounted file (chd_io_*), the data track's frames */
+static chd_file *g_chd;
+static uint32_t g_chd_first;      /* the track's first sector, in frames from the start */
+static uint32_t g_chd_data;       /* where a frame's 2048 bytes start in it: 16 raw, 0 cooked */
+static uint32_t g_chd_fph;        /* frames a hunk */
+static uint8_t *g_chd_hunk;
+static int64_t g_chd_hunknum = -1;
+static struct { int64_t pos; } g_chd_io;
 
 /* ------------------------------------------------------------ settings */
 
@@ -136,6 +150,105 @@ static long peek(const char *name, uint8_t *buf, size_t len)
 	const long n = ftell(f);
 	fclose(f);
 	return n;
+}
+
+/* libchdr's file: the mounted .chd, opened, read and closed at each read */
+static uint64_t chd_io_size(void *p)
+{
+	(void)p;
+	FILE *f = fopen(g_host_name, "rb");
+	if (!f) return (uint64_t)-1;
+	fseek(f, 0, SEEK_END);
+	const long n = ftell(f);
+	fclose(f);
+	return (uint64_t)n;
+}
+static size_t chd_io_read(void *buf, size_t size, size_t count, void *p)
+{
+	(void)p;
+	FILE *f = fopen(g_host_name, "rb");
+	if (!f) return 0;
+	size_t got = 0;
+	if (fseek(f, (long)g_chd_io.pos, SEEK_SET) == 0) got = fread(buf, size, count, f);
+	fclose(f);
+	g_chd_io.pos += (int64_t)(got * size);
+	return got;
+}
+static int chd_io_close(void *p) { (void)p; return 0; }
+static int chd_io_seek(void *p, int64_t off, int whence)
+{
+	(void)p;
+	if (whence == SEEK_SET) g_chd_io.pos = off;
+	else if (whence == SEEK_CUR) g_chd_io.pos += off;
+	else g_chd_io.pos = (int64_t)chd_io_size(p) + off;
+	return 0;
+}
+static const core_file_callbacks k_chd_io = { chd_io_size, chd_io_read, chd_io_close, chd_io_seek };
+
+/* the first data track of a CD image: its frames and where its sectors are
+ * (chdman's layout: each track padded to 4 frames; a pregap the image holds -
+ * its type starting with V - comes before the track's first sector) */
+static int open_chd(char *err, int errsize)
+{
+	if (chd_open_core_file_callbacks(&k_chd_io, NULL, CHD_OPEN_READ, NULL, &g_chd) != CHDERR_NONE)
+	{
+		snprintf(err, (size_t)errsize, "%s is not a CHD libchdr can read", g_zip_name);
+		return 0;
+	}
+	const chd_header *h = chd_get_header(g_chd);
+	if (h->unitbytes != CD_FRAME_SIZE || h->hunkbytes % CD_FRAME_SIZE)
+	{
+		snprintf(err, (size_t)errsize, "%s is a CHD of a hard disk or a laserdisc, not of a CD", g_zip_name);
+		return 0;
+	}
+	g_chd_fph = h->hunkbytes / CD_FRAME_SIZE;
+	uint32_t start = 0;
+	for (uint32_t i = 0;; i++)
+	{
+		char meta[256];
+		uint32_t len = 0, tag = 0;
+		uint8_t flags;
+		if (chd_get_metadata(g_chd, CDROM_TRACK_METADATA2_TAG, i, meta, sizeof meta - 1, &len, &tag, &flags) != CHDERR_NONE)
+			break;
+		meta[len < sizeof meta ? len : sizeof meta - 1] = 0;
+		int track = 0, frames = 0, pregap = 0, postgap = 0;
+		char type[32] = "", subtype[32] = "", pgtype[32] = "", pgsub[32] = "";
+		if (sscanf(meta, CDROM_TRACK_METADATA2_FORMAT, &track, type, subtype, &frames, &pregap, pgtype, pgsub, &postgap) < 4)
+			break;
+		const int stored_pregap = pgtype[0] == 'V' ? pregap : 0;
+		if (!strcmp(type, "MODE1_RAW") || !strcmp(type, "MODE1"))
+		{
+			g_chd_first = start + (uint32_t)stored_pregap;
+			g_chd_data = strcmp(type, "MODE1_RAW") ? 0 : 16;
+			g_host_size = (uint32_t)(frames - stored_pregap) * 2048u;
+			g_chd_hunk = malloc(h->hunkbytes);
+			return 1;
+		}
+		start += ((uint32_t)frames + CD_TRACK_PADDING - 1) / CD_TRACK_PADDING * CD_TRACK_PADDING;
+	}
+	snprintf(err, (size_t)errsize, "%s holds no data track (MODE1) for rawgl to read", g_zip_name);
+	return 0;
+}
+
+static uint32_t chd_read_sectors(uint32_t pos, uint8_t *out, uint32_t len)
+{
+	uint32_t done = 0;
+	while (done < len)
+	{
+		const uint32_t at = pos + done;
+		const uint32_t frame = g_chd_first + at / 2048, in = at % 2048;
+		const int64_t hunk = frame / g_chd_fph;
+		if (hunk != g_chd_hunknum)
+		{
+			if (chd_read(g_chd, (uint32_t)hunk, g_chd_hunk) != CHDERR_NONE) break;
+			g_chd_hunknum = hunk;
+		}
+		uint32_t n = 2048 - in;
+		if (n > len - done) n = len - done;
+		memcpy(out + done, g_chd_hunk + (frame % g_chd_fph) * CD_FRAME_SIZE + g_chd_data + in, n);
+		done += n;
+	}
+	return done;
 }
 
 /* rawgl's own test for a 3DO disc (resource_3do.cpp OperaIso::readToc) */
@@ -230,7 +343,7 @@ int rawgl_files_load(char *err, int errsize)
 	/* the project's slot map names the file; without one, a host that is not a
 	 * project's mounts it as "rom" (chimera-run <package> <rom>), and the
 	 * core's harnesses as game.zip, or game.iso */
-	static const char *const fallbacks[] = { "rom", "game.zip", "game.iso" };
+	static const char *const fallbacks[] = { "rom", "game.zip", "game.iso", "game.chd" };
 	uint8_t head[128];
 	long size = -1;
 	const int from_slot = wbx_slot_name("game", 0, g_zip_name, (int)sizeof g_zip_name) != NULL;
@@ -249,6 +362,23 @@ int rawgl_files_load(char *err, int errsize)
 		else
 			snprintf(err, (size_t)errsize, "Another World needs the game's files: add a .zip of the game's folder (or the 3DO disc's .iso) to the project");
 		return 0;
+	}
+
+	if (size >= 16 && !memcmp(head, "MComprHD", 8))
+	{
+		/* a compressed disc: the engine is told its data track is an .iso */
+		snprintf(g_host_name, sizeof g_host_name, "%s", g_zip_name);
+		if (!open_chd(err, errsize)) return 0;
+		uint8_t sector0[128];
+		if (chd_read_sectors(0, sector0, sizeof sector0) != sizeof sector0 || !is_opera_image(sector0))
+		{
+			snprintf(err, (size_t)errsize, "%s is a CD, but not a 3DO disc (its first sector is not an Opera file system's)", g_zip_name);
+			return 0;
+		}
+		snprintf(g_host_path, sizeof g_host_path, "game.iso");
+		snprintf(g_data_dir, sizeof g_data_dir, "%s", g_host_path);
+		g_has_host = 2;
+		return 1;
 	}
 
 	if (size >= 128 && is_opera_image(head))
@@ -282,7 +412,7 @@ FILE *rawgl_files_soundfont(void)
 	return fopen(name, "rb");
 }
 
-int rawgl_files_count(void) { return g_nfiles + g_has_host; }
+int rawgl_files_count(void) { return g_nfiles + (g_has_host != 0); }
 
 const char *rawgl_files_data_dir(void) { return g_data_dir; }
 
@@ -330,6 +460,7 @@ int rawgl_memfs_host(const char *path, uint32_t *size)
 uint32_t rawgl_memfs_host_read(int id, uint32_t pos, void *ptr, uint32_t len)
 {
 	if (id != 0 || !g_has_host) return 0;
+	if (g_has_host == 2) return chd_read_sectors(pos, ptr, len);
 	uint8_t *out = ptr;
 	uint32_t done = 0;
 	while (done < len)

@@ -16,3 +16,6 @@
 [submodule "extern/munt"]
 	path = extern/munt
 	url = https://github.com/munt/munt.git
+[submodule "extern/libchdr"]
+	path = extern/libchdr
+	url = https://github.com/rtissera/libchdr.git

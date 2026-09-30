@@ -9,6 +9,7 @@ ZLIB  := $(ROOT)/extern/zlib
 STB   := $(ROOT)/extern/stb
 TSF   := $(ROOT)/extern/TinySoundFont
 MUNT  := $(ROOT)/extern/munt/mt32emu/src
+CHDR  := $(ROOT)/extern/libchdr
 MB    ?= $(or $(MINIBOX_DIR),$(HOME)/chimera/extern/chimera-common-minibox)
 
 # ---- rawgl, upstream: its Makefile's SRCS less its frontend - main.cpp,
@@ -66,6 +67,23 @@ $(MUNT_CONFIG): munt-config.h
 	cp munt-config.h $@
 MUNT_CXXFLAGS_COMMON := -std=c++11 -O2 -I$(ROOT)/build/munt-config -I$(MUNT)
 
+# ---- libchdr (the submodule extern/libchdr, tag v0.3.0): MAME's compressed
+# disc images (.chd), which is how 3DO discs usually come - the core reads the
+# data track out of one as rawgl would read the disc's image. Its CD codecs:
+# LZMA (its own copy of the LZMA SDK's decoder), zlib (the core's zlib,
+# CHDR_SYSTEM_ZLIB, in place of its bundled miniz), FLAC (dr_flac, its SIMD
+# paths off) and Zstandard (its amalgamated decoder, its run-time BMI2 dispatch
+# off): the same code on every machine.
+CHDR_NAMES := src/libchdr_bitstream src/libchdr_cdrom src/libchdr_chd src/libchdr_codec_cdfl src/libchdr_codec_cdlz \
+	src/libchdr_codec_cdzl src/libchdr_codec_cdzs src/libchdr_codec_flac src/libchdr_codec_huff src/libchdr_codec_lzma \
+	src/libchdr_codec_zlib src/libchdr_codec_zstd src/libchdr_flac src/libchdr_huffman \
+	deps/lzma-25.01/src/LzmaDec deps/zstd-1.5.7/zstddeclib
+CHDR_SRCS := $(addprefix $(CHDR)/,$(addsuffix .c,$(CHDR_NAMES)))
+CHDR_DEFS := -DCHDR_SYSTEM_ZLIB -DWANT_RAW_DATA_SECTOR=1 -DWANT_SUBCODE=1 -DVERIFY_BLOCK_CRC=1 -DLOWRAM_TARGET=0 \
+	-DDR_FLAC_NO_SIMD -DDYNAMIC_BMI2=0 -DZSTD_DISABLE_ASM=1
+CHDR_CFLAGS_COMMON := -std=gnu11 -O2 -DNDEBUG $(CHDR_DEFS) -I$(CHDR)/include -I$(CHDR)/deps/lzma-25.01/include \
+	-I$(CHDR)/deps/zstd-1.5.7 -I$(ZLIB)
+
 # ---- stb_vorbis (extern/stb) and TinySoundFont (extern/TinySoundFont): the
 # 20th Anniversary Edition's Ogg Vorbis music and Windows 3.1's MIDI music,
 # compiled in the core's own translation units (vorbis.c, midi.c) over its
@@ -75,7 +93,7 @@ MUNT_CXXFLAGS_COMMON := -std=c++11 -O2 -I$(ROOT)/build/munt-config -I$(MUNT)
 CORE_C_NAMES := coro files halt midi vorbis wbx-entry
 CORE_CXX_NAMES := rawgl-driver sdl-shim
 CORE_HDRS := rawgl-driver.h rawgl-files.h rawgl-audio.h coro.h midi.h detmath.h $(MUNT_CONFIG) $(wildcard compat/*.h) $(wildcard $(RAWGL)/*.h)
-CORE_CFLAGS_COMMON := -std=gnu11 -O2 -Icompat -I$(MINIZ) $(MINIZ_DEFS) -I$(STB) -I$(TSF)
+CORE_CFLAGS_COMMON := -std=gnu11 -O2 -Icompat -I$(MINIZ) $(MINIZ_DEFS) -I$(STB) -I$(TSF) -I$(CHDR)/include
 CORE_CXXFLAGS_COMMON := $(RAWGL_CXXFLAGS_COMMON) -I$(STB)
 
 # the calls the core answers itself (rawgl-driver.cpp): the engine's clock at

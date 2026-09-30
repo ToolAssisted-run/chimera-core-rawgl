@@ -11,9 +11,10 @@
 #   turbo        the first half not drawn: the rest the same, and the first
 #                half's pictures really not drawn
 #   releases     the synthetic game as the 15th and 20th Anniversary Editions,
-#                Windows 3.1 and the 3DO (its folder, and its disc image read
-#                in place): native = sandbox, rerecord, session, each; the
-#                3DO's folder and disc the same machine; Jump the 3DO's only; the SoundFont changes Windows 3.1's sound and
+#                Windows 3.1 and the 3DO (its folder, its disc image read in
+#                place, and the disc as a CHD): native = sandbox, rerecord,
+#                session, each; the 3DO's folder, image and CHD the same
+#                machine; Jump the 3DO's only; the SoundFont changes Windows 3.1's sound and
 #                nothing else
 #   settings     randomSeed is what the script's seed starts at, language what
 #                the DOS copy protection's title choice reads, difficulty and
@@ -39,7 +40,8 @@
 # usage: run-gate.sh [-m <miniBox dir>] [-g <Another World zip or iso> [-M <movie>]] [-f <frames>]
 #                    [-c <chimera-run>] [-r <ROM dir>]
 #   -g adds the equivalence, rerecord and session legs on a real release (the
-#      zip of the game's folder, or the 3DO's disc, as a project would bring it;
+#      zip of the game's folder, or the 3DO's disc - .iso or .chd - as a project
+#      would bring it;
 #      not in the repo): 2000 steps from power-on, or the steps of the movie -M
 #      names (a movie of your own, kept out of the repo)
 #   -c runs the engine leg with that chimera-run (build/dll/chimera-run of a
@@ -134,7 +136,7 @@ digest_run() { # digest_run <native|wbx> <dir> <frames> <movie> [options] > out
 	if [ "$b" = native ]; then "$native" "$d" --frames "$n" --movie "$m" "$@" 2>/dev/null
 	else "$wbx" "$core" "$d" --frames "$n" --movie "$m" "$@" 2>/dev/null; fi
 }
-for rel in 15th 20th win31 3do 3do-iso; do
+for rel in 15th 20th win31 3do 3do-iso 3do-chd; do
 	case $rel in
 		15th|20th) m="$here/tests/synthetic-nth.movie"; n=90 ;;
 		win31) m="$movie"; n=100 ;;
@@ -142,8 +144,11 @@ for rel in 15th 20th win31 3do 3do-iso; do
 	esac
 	d="$work/rel-$rel"
 	mkdir -p "$d"
-	if [ $rel = 3do-iso ]; then python3 "$here/tests/make-synthetic.py" --release $rel "$d/game.iso"
-	else python3 "$here/tests/make-synthetic.py" --release $rel "$d/game.zip"; fi
+	case $rel in
+		3do-iso) python3 "$here/tests/make-synthetic.py" --release $rel "$d/game.iso" ;;
+		3do-chd) python3 "$here/tests/make-synthetic.py" --release $rel "$d/game.chd" ;;
+		*) python3 "$here/tests/make-synthetic.py" --release $rel "$d/game.zip" ;;
+	esac
 	[ $rel = win31 ] && cp "$root/extern/TinySoundFont/examples/florestan-subset.sf2" "$d/soundfont.sf2"
 	digest_run native "$d" $n "$m" --trace "$d/t" --trace-props "Game.Release,Game.Part" > "$d/n"
 	digest_run wbx "$d" $n "$m" > "$d/w"
@@ -156,6 +161,7 @@ for rel in 15th 20th win31 3do 3do-iso; do
 	same "releases ($rel)" "$d/s" "$d/w" "session at step $((n * 3 / 5)) = straight"
 done
 same "releases (3do)" "$work/rel-3do-iso/n" "$work/rel-3do/n" "the disc image, read in place = the GameData folder"
+same "releases (3do)" "$work/rel-3do-chd/n" "$work/rel-3do/n" "the disc as a CHD, read through libchdr = the GameData folder"
 if [ "$(value "$work/rel-3do/n" activeButtons)" = 35 ] && [ "$(value "$work/rel-15th/n" activeButtons)" = 34 ]; then
 	pass "releases: Jump is the 3DO's only (35 buttons there, 34 elsewhere)"
 else
@@ -357,6 +363,7 @@ if [ -n "$game" ]; then
 	mkdir -p "$work/game"
 	case "$game" in
 		*.iso|*.ISO) cp "$game" "$work/game/game.iso" ;;
+		*.chd|*.CHD) cp "$game" "$work/game/game.chd" ;;
 		*) cp "$game" "$work/game/game.zip" ;;
 	esac
 	gn=2000

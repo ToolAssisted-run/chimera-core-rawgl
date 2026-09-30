@@ -1,5 +1,5 @@
 {
-  "_comment": "An Another World project brings the game as one file - a .zip of the game's folder (the DOS release's MEMLIST.BIN and BANK files, the Amiga's or the Atari ST's BANK files, the 15th Anniversary Edition's folder with Data/Pak01.pak, the 20th's with game/, Windows 3.1's with BANK, the 3DO's with GameData/), at its top or in a folder, names in any case; or the 3DO disc's image (.iso) as it is. The core unpacks a zip at start into memory no savestate carries, and reads a disc image where it lies. Windows 3.1's MIDI music is played with a SoundFont, if the project brings one.",
+  "_comment": "An Another World project brings the game as one file - a .zip of the game's folder (the DOS release's MEMLIST.BIN and BANK files, the Amiga's or the Atari ST's BANK files, the 15th Anniversary Edition's folder with Data/Pak01.pak, the 20th's with game/, Windows 3.1's with BANK, the 3DO's with GameData/), at its top or in a folder, names in any case; or the 3DO disc as it is - its image (.iso) or MAME's compressed image of it (.chd). The core unpacks a zip at start into memory no savestate carries, and reads a disc where it lies. Windows 3.1's MIDI music is played with a SoundFont, if the project brings one.",
   "slots": [
     {
       "id": "game",
@@ -8,9 +8,10 @@
       "max": 1,
       "formats": [
         "zip",
-        "iso"
+        "iso",
+        "chd"
       ],
-      "help": "A .zip of Another World's folder - DOS, Amiga, Atari ST, the 15th or 20th Anniversary Edition, Windows 3.1, the 3DO's GameData - or the 3DO disc's image (.iso)."
+      "help": "A .zip of Another World's folder - DOS, Amiga, Atari ST, the 15th or 20th Anniversary Edition, Windows 3.1, the 3DO's GameData - or the 3DO disc (.iso, or .chd)."
     },
     {
       "id": "soundfont",

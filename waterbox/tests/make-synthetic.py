@@ -26,6 +26,8 @@ release's real files take through the core:
            preloads, SDX2-compressed AIFF-C songs, and the 320x240 picture the
            pause shows
   3do-iso  the same, as an Opera disc image (.iso), given as it is
+  3do-chd  the same disc as MAME's compressed image (.chd, stored uncompressed:
+           one MODE1_RAW track, as a real 3DO disc's), given as it is
 
 The parts (the 3DO starts at its logos and title, the anniversary editions at
 16001; DOS and Windows 3.1, having a password screen, at 16000):
@@ -49,7 +51,7 @@ machine: --bad-opcode ends the intro on an opcode rawgl does not have (its
 error()), --bad-shape draws a polygon of more vertices than rawgl allows (its
 assertion). Either halts the machine; the gate checks it keeps stepping.
 
-usage: make-synthetic.py [--release dos|15th|20th|win31|3do|3do-iso]
+usage: make-synthetic.py [--release dos|15th|20th|win31|3do|3do-iso|3do-chd]
                          [--bad-opcode | --bad-shape] <out>
 """
 
@@ -651,8 +653,44 @@ def opera_iso(files):
     return bytes(image)
 
 
+def chd_of_image(image):
+    """a CHD v5 of a CD holding the image as one MODE1_RAW track, its hunks
+    stored uncompressed (libchdr's hunk_read_uncompressed): the header, the
+    track's metadata (CHT2), the map (each hunk's place, in hunks), the hunks;
+    a frame is 2352 bytes of sector - sync, header, the 2048 bytes, an EDC/ECC
+    left zero (libchdr checks it only on compressed hunks) - and 96 of subcode"""
+    FRAME, FPH = 2448, 8
+    sectors = (len(image) + 2047) // 2048
+    frames = (sectors + 3) // 4 * 4                      # chdman pads a track to 4 frames
+    hunkbytes = FRAME * FPH
+    hunks = (frames + FPH - 1) // FPH
+    meta_text = ("TRACK:1 TYPE:MODE1_RAW SUBTYPE:NONE FRAMES:%d PREGAP:0 PGTYPE:MODE1 PGSUB:NONE POSTGAP:0" % frames).encode() + b"\0"
+    meta_off = 124
+    meta = struct.pack(">4sIQ", b"CHT2", (1 << 24) | len(meta_text), 0) + meta_text
+    map_off = meta_off + len(meta)
+    first_hunk = (map_off + hunks * 4 + hunkbytes - 1) // hunkbytes
+    header = bytearray(124)
+    struct.pack_into(">8sII", header, 0, b"MComprHD", 124, 5)
+    struct.pack_into(">QQQII", header, 32, frames * FRAME, map_off, meta_off, hunkbytes, FRAME)
+    out = bytearray(first_hunk * hunkbytes)
+    out[0:124] = header
+    out[meta_off:meta_off + len(meta)] = meta
+    for h in range(hunks):
+        struct.pack_into(">I", out, map_off + h * 4, first_hunk + h)
+    body = bytearray(hunks * hunkbytes)
+    for s in range(frames):
+        f = bytearray(FRAME)
+        f[0:12] = b"\x00" + b"\xff" * 10 + b"\x00"
+        m, sec = divmod(s + 150, 75)
+        mn, sc = divmod(m, 60)
+        f[12:16] = bytes([int(str(mn), 16), int(str(sc), 16), int(str(sec), 16), 1])   # BCD minute, second, frame; mode 1
+        f[16:16 + 2048] = image[s * 2048:(s + 1) * 2048].ljust(2048, b"\0")
+        body[s * FRAME:(s + 1) * FRAME] = f
+    return bytes(out + body)
+
+
 BUILDERS = {"dos": build_dos, "15th": build_15th, "20th": build_20th, "win31": build_win31,
-            "3do": build_3do, "3do-iso": build_3do}
+            "3do": build_3do, "3do-iso": build_3do, "3do-chd": build_3do}
 
 
 def main():
@@ -673,6 +711,9 @@ def main():
     files = BUILDERS[RELEASE]()
     if RELEASE == "3do-iso":
         open(args[0], "wb").write(opera_iso(files))
+        return
+    if RELEASE == "3do-chd":
+        open(args[0], "wb").write(chd_of_image(opera_iso(files)))
         return
     with zipfile.ZipFile(args[0], "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr(zipfile.ZipInfo("SYNTH/", date_time=(1991, 1, 1, 0, 0, 0)), b"")

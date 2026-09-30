@@ -17,9 +17,10 @@ the CM-32L is Munt's.
 ## What it is
 
 - **Every release rawgl plays**, from the user's own files: a project brings the game as **one file** (the
-  "game" slot) - a .zip of the game's folder, at its top or in a folder, names in any case, or the 3DO disc's
-  image (.iso) as it is. The core unpacks a zip into sealed memory at start (no savestate carries it) and reads a
-  disc image where it lies, a block at a time, holding nothing of the host's between two reads. The package
+  "game" slot) - a .zip of the game's folder, at its top or in a folder, names in any case, or the 3DO disc as it
+  is: its image (.iso) or MAME's compressed image of it (.chd, read with libchdr: its first data track is what
+  rawgl reads as the disc). The core unpacks a zip into sealed memory at start (no savestate carries it) and
+  reads a disc where it lies, a block at a time, holding nothing of the host's between two reads. The package
   carries none of the game's data. A project without the file, a file that is not a zip or a disc, a zip with no
   game in it, and data rawgl cannot tell are refused, saying why.
 
@@ -33,7 +34,7 @@ the CM-32L is Munt's.
   | 15th Anniversary Edition | Data/Pak01.pak | the intro | WAV sounds, WAV music (original or remastered) | original, 320x200 (see below) |
   | 20th Anniversary Edition | game/DAT/FILE017.DAT | the intro | gzip'd WAV sounds, Ogg Vorbis music (original or remastered) | original, 320x200 (see below) |
   | Windows 3.1 | BANK (+ WORLD.EXE) | the copy protection | WAV sounds, MIDI music (with the project's SoundFont) | original, 320x200 |
-  | 3DO | GameData/File340, or the disc image | its logos and title | AIFF sounds, SDX2 AIFF-C songs | 15-bit colour, and its full-screen pictures |
+  | 3DO | GameData/File340, or the disc (.iso, .chd) | its logos and title | AIFF sounds, SDX2 AIFF-C songs | 15-bit colour, and its full-screen pictures |
 
   The anniversary editions run in rawgl's software renderer, as its "original" renderer draws them: the game's
   polygons and its 320x200 pictures, at 320x200. Their HD pictures (1280x800 and up) are drawn only by rawgl's
@@ -76,8 +77,8 @@ the CM-32L is Munt's.
 
 ## What has been run
 
-**The DOS and Amiga (English) releases have run on real data** (below). The other releases' real data has not
-been at hand yet. Every
+**The DOS, Amiga (English) and 3DO releases have run on real data** (below). The other releases' real data
+has not been at hand yet. Every
 release has also run as the core's **synthetic game** - its own bytecode, pictures, sounds and music written in that release's
 format (`waterbox/tests/make-synthetic.py`) - through the whole path its files take: native == sandbox,
 rerecord, session. That proves the core's side (the files, the step, the clock, the sound decoders, the
@@ -102,6 +103,13 @@ resources by its own table. The same path as DOS - the protection (whose picker 
 takes up to 25 frames to follow a press), the credits, the 148-second intro (the Amiga's music runs a little
 shorter than the DOS port's), the first level to the leech - 3,767 steps: native == sandbox, rerecord, session.
 
+**Out of This World (3DO, USA: a CHD, MAME's compressed image - one MODE1_RAW track of 164,290 frames)**: the
+project brings the .chd as it is; libchdr reads it (LZMA, zlib and FLAC hunks), a hunk at a time, through
+callbacks that open, read and close the mounted file, so a savestate holds nothing of the host's. The Interplay
+logo and the others with the 3DO's songs, the title, the 160-second intro at the 3DO's 60 Hz timings with its
+painted backgrounds, the first level to the leech and the 3DO's own continue screen - 3,907 steps: native ==
+sandbox, rerecord, session; and chimera-run taking the .chd as its rom.
+
 | Release | Synthetic game | Real files |
 |---|---|---|
 | DOS | yes, and its effects on a CM-32L (with real CM-32L ROMs) | **yes**: Out of This World (US), the copy protection answered, its credits, the whole intro, the first level; native == sandbox, rerecord, session; and with the CM-32L |
@@ -113,7 +121,7 @@ shorter than the DOS port's), the first level to the leech - 3,767 steps: native
 | 15th Anniversary Edition | yes: Pak01.pak, WAV sounds and music, original and remastered | needs files |
 | 20th Anniversary Edition | yes: game/, gzip'd sounds, Ogg music, difficulty, original and remastered | needs files |
 | Windows 3.1 | yes: BANK (unpacked entries), its palettes, WAV, MIDI with a SoundFont | needs files (and a SoundFont) |
-| 3DO | yes: GameData/ and a disc image, logos and title, AIFF, SDX2, a coded cel | needs files |
+| 3DO | yes: GameData/, a disc image and a CHD, logos and title, AIFF, SDX2, a coded cel | **yes**: Out of This World (USA), a CHD; the logos, the title, the whole intro, the first level; native == sandbox, rerecord, session; and through chimera-run |
 
 ## The patches
 
@@ -176,5 +184,6 @@ GPL (Fabien Sanglard's Another-World-Bytecode-Interpreter is GPL-2.0), but rawgl
 writing; until its author states terms, a package of this core is for private use and not to be redistributed
 (`waterbox/package-licenses.json`). The integration is GPL-2.0-or-later so that it stays compatible with
 whichever GPL that turns out to be. miniz (`extern/miniz`) and TinySoundFont (`extern/TinySoundFont`) are MIT,
-zlib (`extern/zlib`) is under the zlib licence, stb_vorbis (`extern/stb`) is public domain or MIT, and Munt's
-libmt32emu (`extern/munt`) is LGPL-2.1-or-later.
+zlib (`extern/zlib`) is under the zlib licence, stb_vorbis (`extern/stb`) is public domain or MIT, Munt's
+libmt32emu (`extern/munt`) is LGPL-2.1-or-later, and libchdr (`extern/libchdr`) is BSD-3-Clause, with the LZMA
+SDK's decoder (public domain), Zstandard's (BSD-3-Clause) and dr_flac (public domain or MIT-0) in it.

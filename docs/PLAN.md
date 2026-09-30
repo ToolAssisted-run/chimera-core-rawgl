@@ -75,6 +75,25 @@ Amiga's music runs a little shorter than the DOS port's; the same sync points), 
 press up to 25 frames late here (10 on DOS): the local solver now waits for the game to act instead of counting
 frames.
 
+## The real 3DO release (2026-09-30)
+
+Out of This World (USA), 3DO, as a CHD (v5, codecs cdlz/cdzl/cdfl, one MODE1_RAW track of 164,290 frames:
+216 MB for 336 MB of disc). rawgl reads a 3DO disc only as an Opera image or a GameData folder, and 3DO discs
+mostly come as CHDs, so the core reads one itself: libchdr (extern/libchdr, v0.3.0 - the release, not its
+development head), built against the core's zlib (CHDR_SYSTEM_ZLIB, so its bundled miniz does not meet the
+core's), its LZMA decoder, Zstandard's decoder with its run-time BMI2 dispatch off and dr_flac with its SIMD
+off (the same code on every CPU). It opens the file through callbacks that open, read and close the mount at
+each call (as the .iso path does: miniBox's savestates carry no host handles), finds the first MODE1 or
+MODE1_RAW track (chdman's layout: tracks padded to 4 frames, a stored pregap first), and serves its 2048-byte
+sectors to rawgl as game.iso, one decompressed hunk (8 frames) cached in guest memory. Checked: the first
+sector must be an Opera file system's, or the project is refused as "a CD, but not a 3DO disc".
+
+What ran (run-gate.sh -g -M, a local movie): the three logos (the 3DO's songs under them), the title, the
+160-second intro (60 Hz timings: steps of 16, 33, 66, 83 ms), the first level to the leech and the 3DO's continue
+screen. 3,907 steps: native == sandbox, rerecord, session; chimera-run with the .chd as its rom. The synthetic 3DO
+disc is also written as an (uncompressed) CHD, and the gate holds it to the same machine as the folder and the
+image.
+
 ## The other releases (2026-09-30)
 
 Sergio: support every release rawgl plays, the real files to come later. Done, each proven on the synthetic game
