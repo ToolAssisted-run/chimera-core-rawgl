@@ -39,6 +39,9 @@
 #include "systemstub.h"
 #include "util.h"
 
+#define MT32EMU_API_TYPE 1
+#include <mt32emu.h>
+
 #include "coro.h"
 #include "midi.h"
 #include "rawgl-audio.h"
@@ -271,9 +274,38 @@ void game_main()
 			if (!ok) halt("the project's SoundFont could not be read (a .sf2 file)");
 		}
 	}
+	/* the DOS release's sound effects on a Roland CM-32L (rawgl's --mt32):
+	 * Munt, with the ROMs rawgl opens by name, which the project brings as
+	 * firmware - refused here, with their names, rather than silent */
+	const bool mt32 = g.settings.mt32 && type == Resource::DT_DOS;
+	if (mt32)
+	{
+		/* each ROM tried in a context of its own, as rawgl's mixer will add it */
+		static const char *const roms[] = { "CM32L_CONTROL.ROM", "CM32L_PCM.ROM" };
+		for (const char *rom : roms)
+		{
+			char msg[200];
+			FILE *f = fopen(rom, "rb");
+			if (!f)
+			{
+				snprintf(msg, sizeof msg, "the MT-32 sound effects need the CM-32L's ROMs: %s is not there", rom);
+				halt(msg);
+			}
+			fclose(f);
+			mt32emu_report_handler_i none = { 0 };
+			mt32emu_context c = mt32emu_create_context(none, 0);
+			const mt32emu_return_code rc = mt32emu_add_rom_file(c, rom);
+			mt32emu_free_context(c);
+			if (rc != MT32EMU_RC_ADDED_CONTROL_ROM && rc != MT32EMU_RC_ADDED_PCM_ROM)
+			{
+				snprintf(msg, sizeof msg, "%s is not a Roland ROM Munt knows (a CM-32L's, or an MT-32's)", rom);
+				halt(msg);
+			}
+		}
+	}
 	g.graphics = GraphicsSoft_create();
 	g.engine->setSystemStub(&g.stub, g.graphics);
-	g.engine->setup((Language)g.settings.language, GRAPHICS_ORIGINAL, "", 1, false);
+	g.engine->setup((Language)g.settings.language, GRAPHICS_ORIGINAL, "", 1, mt32);
 	g.init_done = 1;
 	coro_yield(g.co);
 	for (;;) g.engine->run();

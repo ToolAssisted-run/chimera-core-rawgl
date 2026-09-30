@@ -17,6 +17,7 @@ struct rawgl_settings
 	long random_seed;     /* what the engine's clock reading at start gives */
 	int difficulty;       /* the 20th Anniversary Edition's: 0 easy, 1 normal, 2 hard */
 	int remastered_audio; /* the anniversary editions' remastered sounds and music */
+	int mt32;             /* the DOS release's sound effects on a Roland CM-32L */
 };
 
 void rawgl_settings_read(struct rawgl_settings *s);

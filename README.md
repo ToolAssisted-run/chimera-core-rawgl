@@ -11,7 +11,8 @@ from the project's file, the second hands a fatal error to the core before rawgl
 rawgl compiled from source - its script interpreter, its software renderer, its mixer (compiled as it is,
 against an SDL_mixer of the core's) - without its SDL and OpenGL frontend, which the core is instead. The
 core's SDL_mixer plays what rawgl asks of it with miniz, zlib, stb_vorbis and TinySoundFont, over its own
-deterministic math (`waterbox/detmath.h`), so the sandbox and the native reference make the same sound.
+deterministic math (`waterbox/detmath.h`), so the sandbox and the native reference make the same sound, and
+the CM-32L is Munt's.
 
 ## What it is
 
@@ -24,7 +25,7 @@ deterministic math (`waterbox/detmath.h`), so the sandbox and the native referen
 
   | Release | The folder is recognised by | Starts at | Sound | Picture |
   |---|---|---|---|---|
-  | DOS | MEMLIST.BIN + BANK01..BANK0D | the copy protection (the demo: the intro) | rawgl's 4 channels and module player | original, 320x200 |
+  | DOS | MEMLIST.BIN + BANK01..BANK0D | the copy protection (the demo: the intro) | rawgl's 4 channels and module player; the effects on a CM-32L with the mt32 setting | original, 320x200 |
   | DOS demo | MEMLIST.BIN + DEMO01.. | the intro | the same | the same |
   | Amiga (French, English) | BANK01 of 244,674 / 244,868 bytes | the copy protection | the same | the same |
   | Atari ST | BANK01 of 227,142 bytes | the copy protection | the same | the same |
@@ -56,8 +57,14 @@ deterministic math (`waterbox/detmath.h`), so the sandbox and the native referen
   down and a button let go a key coming up, as rawgl's SDL frontend sees them - so where the game takes a
   press (a menu, a picture it waits on), a button still held is not pressed again until it is let go. Jump and
   Back exist on the 3DO only (`IsButtonActive`).
-- **Settings**: Language, Random seed (0..65535), Difficulty (the 20th's, rawgl's `--difficulty`) and
-  Remastered Sound (the anniversary editions', rawgl's `--audio`).
+- **Settings**: Language, Random seed (0..65535), Difficulty (the 20th's, rawgl's `--difficulty`),
+  Remastered Sound (the anniversary editions', rawgl's `--audio`) and MT-32 Sound Effects (the DOS release's,
+  rawgl's `--mt32`).
+- **The MT-32**: with the mt32 setting, rawgl sends the DOS release's sound effects it has a note for (41 of
+  them) to a Roland CM-32L's rhythm part instead of playing the game's samples - Munt's libmt32emu, compiled in,
+  with the CM-32L's ROMs the project brings as firmware (`CM32L_CONTROL.ROM`, `CM32L_PCM.ROM`; another pair Munt
+  knows may take their place). The music stays the game's own. A project with the setting and without the ROMs,
+  or with files that are not ROMs, is refused, naming them.
 - **Properties** (Chimera's `docs/game-cores.md`): a `Game State` block (the part, the part to come, the
   screen, the release, the language, the machine's steps and milliseconds, whether the music plays, whether
   the engine halted) and the game's **256 script variables** in place (`Script Variables`, writable): the
@@ -80,7 +87,7 @@ cels as the real files use them, the 15th's TooDC encoding - their copy protecti
 
 | Release | Synthetic game | Real files |
 |---|---|---|
-| DOS | yes | needs files |
+| DOS | yes, and its effects on a CM-32L (with real CM-32L ROMs) | needs files |
 | DOS demo | (the DOS path, less the password screen) | needs files |
 | Amiga French / English | no (rawgl finds its resources by a built-in table keyed on BANK01's size) | needs files |
 | Atari ST | no (the same) | needs files |
@@ -115,7 +122,7 @@ with its C++ guest toolchain built (`meson setup build/meson-cpp -Dguest_cpp=tru
 
 ## The gate
 
-`./waterbox/run-gate.sh [-m <miniBox>] [-c <chimera-run>] [-g <Another World zip>]`. Another World's data is
+`./waterbox/run-gate.sh [-m <miniBox>] [-c <chimera-run>] [-g <Another World zip or iso>] [-r <ROM dir>]`. Another World's data is
 not the core's to carry, so the gate's content is **a game of its own**: `tests/make-synthetic.py` writes a
 four-part "game" - its own bytecode, palettes, polygons, sounds and music - in each release's format, which
 goes through the same path that release's files take: a copy-protection part to start at (or the 3DO's logos
@@ -124,7 +131,8 @@ marker, the music's marker, the pause, Code) and a password screen. Over it: nat
 picture, sound, length and lag, the clock, the memory), a savestate before every step, a new host in the middle,
 for DOS, the 15th and 20th Anniversary Editions, Windows 3.1, the 3DO folder and the 3DO disc; the 3DO's folder
 and disc the same machine; turbo; the settings in both builds; the SoundFont changing Windows 3.1's sound and
-nothing else; the slot map; six refusals; the two halts in both builds; no host clock in the guest; teeth; and
+nothing else; with `-r`, the DOS effects on the CM-32L (native == sandbox, rerecord, session, and only the sound
+changing), and without ROMs, or with files that are not, a refusal; the slot map; six refusals; the two halts in both builds; no host clock in the guest; teeth; and
 with `-c` the package through Chimera's own engine (chimera-run). With `-g`, the equivalence, rerecord and
 session legs also run on a real release from power-on. `tests/tune.ogg` (the 20th's test music) is the
 generator's MIDI tune rendered by TiMidity++ with FluidR3_GM (MIT).
@@ -150,4 +158,5 @@ GPL (Fabien Sanglard's Another-World-Bytecode-Interpreter is GPL-2.0), but rawgl
 writing; until its author states terms, a package of this core is for private use and not to be redistributed
 (`waterbox/package-licenses.json`). The integration is GPL-2.0-or-later so that it stays compatible with
 whichever GPL that turns out to be. miniz (`extern/miniz`) and TinySoundFont (`extern/TinySoundFont`) are MIT,
-zlib (`extern/zlib`) is under the zlib licence, stb_vorbis (`extern/stb`) is public domain or MIT.
+zlib (`extern/zlib`) is under the zlib licence, stb_vorbis (`extern/stb`) is public domain or MIT, and Munt's
+libmt32emu (`extern/munt`) is LGPL-2.1-or-later.

@@ -26,8 +26,8 @@ Started 2026-09-30, from the SDLPoP2 core's shape (the driver, the harnesses, th
 - **M6, savestates**: free - the engine's stack is guest memory (`coro.c`, MAP_STACK), the files are sealed.
   Rerecord (save and load before every step) and session (save while paused, new host, load) legs pass.
 - **M7, the package**: `waterbox.config`, keybinds, `file_slots.json`, licences; a deterministic package.
-- **The gate**: 46 legs on the synthetic game in every release's format, including the package through
-  chimera-run.
+- **The gate**: 52 legs on the synthetic game in every release's format, including the package through
+  chimera-run and (with `-r`) the CM-32L.
 
 ## The other releases (2026-09-30)
 
@@ -71,6 +71,16 @@ in its own format (native == sandbox, rerecord, session), none yet on real data:
   pad's Jump and its Back menu as buttons only it has (`IsButtonActive`).
 - **Settings**: difficulty (the 20th's) and remasteredAudio (the anniversary editions'), which rawgl hands to the
   20th's script (variables 0xBF, 0xDE) and uses to pick sound files.
+
+- **The MT-32** (Sergio: "all MT-32 support"): rawgl's `--mt32`, the DOS release's sound effects on a
+  Roland CM-32L - Munt's libmt32emu at the SDLPoP2 core's commit (2.8.3), compiled into both builds in place of
+  the stub, the mt32 setting, the CM-32L's ROMs as firmware required with it (v1.02 control, the 1 MB PCM; the
+  hashes are Munt's own table's). rawgl opens them by name itself (`mt32emu_add_rom_file`, Munt's ifstream,
+  which works on miniBox's mounts); the driver tries each in a context of its own first, so a missing file or
+  one that is not a ROM is refused by name instead of playing silence. Tested with real CM-32L ROMs on the
+  synthetic game (its fire sound is 0x33, one rawgl maps to a rhythm note): native == sandbox, rerecord,
+  session, only the sound changing; and through chimera-run with the ROMs as firmware. Only DOS: rawgl uses it
+  for no other release.
 
 Decided for now, to revisit with the real data:
 

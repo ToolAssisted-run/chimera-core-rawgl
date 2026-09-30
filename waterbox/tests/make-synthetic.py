@@ -7,8 +7,9 @@ scratch - its own bytecode, palettes, polygons, sounds and music - in the
 layout of the release asked for (--release), which exercises the path that
 release's real files take through the core:
 
-  dos      MEMLIST.BIN and banks; the sound a raw sample, the music a module
-           whose patterns tell the script their row (VAR_MUSIC_SYNC)
+  dos      MEMLIST.BIN and banks; the sound a raw sample (0x33, which the mt32
+           setting plays on a CM-32L instead), the music a module whose
+           patterns tell the script their row (VAR_MUSIC_SYNC)
   15th     the 15th Anniversary Edition's Data/Pak01.pak; WAV sounds (and
            their remastered versions, rmsnd/), the intro's music a WAV
            (Music/AW/Intro2004.wav, and Music/AW/RmSnd/)
@@ -327,7 +328,9 @@ def midi_tune():
 # the play part's music, the sound fire plays)
 def audio_plan():
     if RELEASE == "dos":
-        return [0x01, 0x02], 0x02, 0x02, 0x01
+        # fire's sound is 0x33, one of the numbers rawgl plays on a CM-32L
+        # with the mt32 setting (Mixer::_mt32SoundsTable: a rhythm note)
+        return [0x01, 0x02, 0x33], 0x02, 0x02, 0x33
     if RELEASE in ("15th", "win31"):
         return [], 7, None, 0x01          # the intro's music, by its number (7)
     if RELEASE == "20th":
@@ -478,6 +481,7 @@ def build_dos():
     res = {n: (t, d, 1) for n, (t, d) in resources().items()}
     res[0x01] = (RT_SOUND, sound_raw(), 1)
     res[0x02] = (RT_MUSIC, music_module(), 1)
+    res[0x33] = (RT_SOUND, sound_raw(), 1)
     # the password screen's code in a bank of its own: its being there is what
     # tells the engine the release has a password screen (and so a copy
     # protection to start at)

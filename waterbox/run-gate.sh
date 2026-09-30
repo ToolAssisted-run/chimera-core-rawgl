@@ -21,6 +21,10 @@
 #                remasteredAudio what the anniversary editions read (both
 #                builds)
 #   slots        the project's slot map names the zip
+#   mt32         the DOS release's sound effects on a CM-32L (Munt), with the
+#                ROMs -r names: native = sandbox, rerecord, session, and only
+#                the sound changes; without ROMs, or with a file that is not
+#                one, a refusal that names it
 #   refusals     no zip, not a zip, no game in it, data rawgl cannot tell, a
 #                15th Anniversary Edition's Pak01.pak that is not one, a seed
 #                out of range: each says why
@@ -33,11 +37,14 @@
 #                chimera-run plays a movie in Chimera's format (console
 #                buttons, then P1's), with and without rerecording
 #
-# usage: run-gate.sh [-m <miniBox dir>] [-g <Another World zip>] [-f <frames>] [-c <chimera-run>]
+# usage: run-gate.sh [-m <miniBox dir>] [-g <Another World zip>] [-f <frames>] [-c <chimera-run>] [-r <ROM dir>]
 #   -g adds the equivalence, rerecord and session legs on the real game (the
 #      zip of the game's folder, as a project would bring it; not in the repo)
 #   -c runs the engine leg with that chimera-run (build/dll/chimera-run of a
 #      Chimera checkout); it packages the core first
+#   -r runs the MT-32 legs with the CM-32L's ROMs from that folder
+#      (CM32L_CONTROL.ROM and CM32L_PCM.ROM, or Munt's names for them,
+#      cm32l_ctrl_1_02.rom and cm32l_pcm.rom); never in the repo
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
@@ -45,12 +52,14 @@ mb="${MINIBOX_DIR:-$HOME/chimera/extern/chimera-common-minibox}"
 game=""
 frames=100
 chimera_run=""
-while getopts "m:g:f:c:" opt; do
+roms=""
+while getopts "m:g:f:c:r:" opt; do
 	case "$opt" in
 		m) mb="$OPTARG" ;;
 		g) game="$OPTARG" ;;
 		f) frames="$OPTARG" ;;
 		c) chimera_run="$OPTARG" ;;
+		r) roms="$OPTARG" ;;
 		*) exit 2 ;;
 	esac
 done
@@ -207,6 +216,46 @@ for rel in 15th 20th; do
 	fi
 done
 
+echo "== mt32"
+mkdir -p "$work/mt32-none" "$work/mt32-bad"
+for d in mt32-none mt32-bad; do
+	cp "$work/synth/game.zip" "$work/$d/"
+	printf '{"mt32": true}' > "$work/$d/settings"
+done
+head -c 65536 /dev/zero > "$work/mt32-bad/CM32L_CONTROL.ROM"
+head -c 1048576 /dev/zero > "$work/mt32-bad/CM32L_PCM.ROM"
+if [ -n "$roms" ]; then
+	ctrl=""; pcm=""
+	for f in CM32L_CONTROL.ROM cm32l_ctrl_1_02.rom; do [ -z "$ctrl" ] && [ -f "$roms/$f" ] && ctrl="$roms/$f"; done
+	for f in CM32L_PCM.ROM cm32l_pcm.rom; do [ -z "$pcm" ] && [ -f "$roms/$f" ] && pcm="$roms/$f"; done
+	if [ -n "$ctrl" ] && [ -n "$pcm" ]; then
+		d="$work/mt32"
+		mkdir -p "$d"
+		cp "$work/synth/game.zip" "$d/"
+		cp "$ctrl" "$d/CM32L_CONTROL.ROM"
+		cp "$pcm" "$d/CM32L_PCM.ROM"
+		printf '{"mt32": true}' > "$d/settings"
+		digest_run native "$d" "$frames" "$movie" > "$d/n"
+		digest_run wbx "$d" "$frames" "$movie" > "$d/w"
+		digest_run wbx "$d" "$frames" "$movie" --rerecord > "$d/r"
+		digest_run wbx "$d" "$frames" "$movie" --session-at "$at" > "$d/s"
+		same mt32 "$d/w" "$d/n" "native = sandbox with the CM-32L ($(basename "$ctrl"), $(basename "$pcm"))"
+		same mt32 "$d/r" "$d/w" "rerecord = straight"
+		same mt32 "$d/s" "$d/w" "session at step $at = straight"
+		grep -v '^audioHash=' "$d/n.d" > "$d/a"
+		grep -v '^audioHash=' "$work/n.txt.d" > "$d/b"
+		if cmp -s "$d/a" "$d/b" && [ "$(value "$d/n" audioHash)" != "$(value "$work/n.txt" audioHash)" ]; then
+			pass "mt32: the CM-32L plays the effects instead of the samples, and nothing else changes"
+		else
+			fail "mt32: the MT-32 changed more than the sound, or nothing"
+		fi
+	else
+		fail "mt32: no CM-32L ROMs in $roms"
+	fi
+else
+	echo "(the MT-32 legs with ROMs need -r <ROM dir>)"
+fi
+
 echo "== slots"
 mkdir -p "$work/slots"
 cp "$work/synth/game.zip" "$work/slots/Another World (DOS).zip"
@@ -244,6 +293,8 @@ refuse badpak "No data files found" "a 15th Anniversary Edition's Pak01.pak that
 cp "$work/synth/game.zip" "$work/badseed/game.zip"
 printf '{"randomSeed": 70000}' > "$work/badseed/settings"
 refuse badseed "goes from 0 to 65535" "randomSeed 70000"
+refuse mt32-none "CM32L_CONTROL.ROM is not there" "mt32 without the CM-32L's ROMs"
+refuse mt32-bad "is not a Roland ROM Munt knows" "mt32 with ROMs that are not"
 
 echo "== halts"
 for kind in opcode shape; do

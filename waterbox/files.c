@@ -70,6 +70,7 @@ void rawgl_settings_read(struct rawgl_settings *s)
 	wbx_setting_str("difficulty", str, (int)sizeof str);
 	s->difficulty = !strcmp(str, "easy") ? 0 : !strcmp(str, "hard") ? 2 : 1;
 	s->remastered_audio = wbx_setting_bool("remasteredAudio", 1);
+	s->mt32 = wbx_setting_bool("mt32", 0);
 }
 
 /* ------------------------------------------------------------ the zip */
