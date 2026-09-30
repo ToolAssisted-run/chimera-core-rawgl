@@ -1,0 +1,45 @@
+{
+  "_comment": [
+    "Default bindings for Another World: the keyboard as rawgl has it - the arrows, Space and Enter for fire, C for Code, P for Pause, and the letters",
+    "and Backspace for the password screen (C and P are also the letters C and P, as in rawgl, where typing P on the password screen also pauses).",
+    "The first pad: the d-pad and left stick as the arrows, A as fire, Start as Pause, Back as Code."
+  ],
+  "AllTrollers": {
+    "Another World": {
+      "P1 Up": "Up, J1 POV1U, X1 DpadUp, X1 LStickUp",
+      "P1 Down": "Down, J1 POV1D, X1 DpadDown, X1 LStickDown",
+      "P1 Left": "Left, J1 POV1L, X1 DpadLeft, X1 LStickLeft",
+      "P1 Right": "Right, J1 POV1R, X1 DpadRight, X1 LStickRight",
+      "P1 Action": "Space, Enter, J1 B1, X1 A",
+      "Code": "C, X1 Back",
+      "Pause": "P, J1 B10, X1 Start",
+      "Key A": "A",
+      "Key B": "B",
+      "Key C": "C",
+      "Key D": "D",
+      "Key E": "E",
+      "Key F": "F",
+      "Key G": "G",
+      "Key H": "H",
+      "Key I": "I",
+      "Key J": "J",
+      "Key K": "K",
+      "Key L": "L",
+      "Key M": "M",
+      "Key N": "N",
+      "Key O": "O",
+      "Key P": "P",
+      "Key Q": "Q",
+      "Key R": "R",
+      "Key S": "S",
+      "Key T": "T",
+      "Key U": "U",
+      "Key V": "V",
+      "Key W": "W",
+      "Key X": "X",
+      "Key Y": "Y",
+      "Key Z": "Z",
+      "Key Backspace": "Backspace"
+    }
+  }
+}

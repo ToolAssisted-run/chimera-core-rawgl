@@ -1,0 +1,6 @@
+[submodule "extern/rawgl"]
+	path = extern/rawgl
+	url = https://github.com/cyxx/rawgl.git
+[submodule "extern/miniz"]
+	path = extern/miniz
+	url = https://github.com/richgel999/miniz.git

@@ -1,0 +1,100 @@
+diff --git a/file.cpp b/file.cpp
+index 393e30d..d33be1c 100644
+--- a/file.cpp
++++ b/file.cpp
+@@ -74,8 +74,66 @@ struct stdFile : File_impl {
+ 	}
+ };
+ 
++#ifdef RAWGL_MEMFS
++/* RAWGL_MEMFS: every file is served out of memory by whoever links the engine
++ * (a Chimera core has its files mounted by name and no directories), through
++ * rawgl_memfs_find(): the file's bytes by its path as the engine asks for it
++ * ("<datapath>/<name>"), matched as the host sees fit (case, folders). Nothing
++ * is ever written. */
++extern "C" const uint8_t *rawgl_memfs_find(const char *path, uint32_t *size);
++
++struct memFile : File_impl {
++	const uint8_t *_data;
++	uint32_t _size, _pos;
++	memFile() : _data(0), _size(0), _pos(0) {}
++	bool open(const char *path, const char *mode) {
++		_ioErr = false;
++		_data = 0;
++		_size = _pos = 0;
++		if (mode[0] != 'r') {
++			return false;
++		}
++		_data = rawgl_memfs_find(path, &_size);
++		return (_data != 0);
++	}
++	void close() {
++		_data = 0;
++		_size = _pos = 0;
++	}
++	uint32_t size() {
++		return _data ? _size : 0;
++	}
++	void seek(int off, int whence) {
++		if (_data) {
++			long pos = (whence == SEEK_CUR) ? (long)_pos + off : (whence == SEEK_END) ? (long)_size + off : off;
++			_pos = (pos < 0) ? 0 : (pos > (long)_size) ? _size : (uint32_t)pos;
++		}
++	}
++	int read(void *ptr, uint32_t len) {
++		if (_data) {
++			uint32_t r = (len > _size - _pos) ? _size - _pos : len;
++			memcpy(ptr, _data + _pos, r);
++			_pos += r;
++			if (r != len) {
++				_ioErr = true;
++			}
++			return r;
++		}
++		return 0;
++	}
++	int write(void *ptr, uint32_t len) {
++		_ioErr = true;
++		return 0;
++	}
++};
++#endif
++
+ File::File() {
++#ifdef RAWGL_MEMFS
++	_impl = new memFile;
++#else
+ 	_impl = new stdFile;
++#endif
+ }
+ 
+ File::~File() {
+@@ -88,6 +146,7 @@ bool File::open(const char *filepath) {
+ 	return _impl->open(filepath, "rb");
+ }
+ 
++#ifndef RAWGL_MEMFS
+ static bool getFilePathNoCase(const char *filename, const char *path, char *out) {
+ 	bool ret = false;
+ 	DIR *d = opendir(path);
+@@ -107,14 +166,20 @@ static bool getFilePathNoCase(const char *filename, const char *path, char *out)
+ 	}
+ 	return ret;
+ }
++#endif
+ 
+ bool File::open(const char *filename, const char *path) {
+ 	_impl->close();
+ 	char filepath[MAXPATHLEN];
++#ifdef RAWGL_MEMFS
++	snprintf(filepath, sizeof(filepath), "%s/%s", path, filename);
++	return _impl->open(filepath, "rb");
++#else
+ 	if (getFilePathNoCase(filename, path, filepath)) {
+ 		return _impl->open(filepath, "rb");
+ 	}
+ 	return false;
++#endif
+ }
+ 
+ bool File::openForWriting(const char *filepath) {

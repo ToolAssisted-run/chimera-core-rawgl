@@ -1,0 +1,15 @@
+{
+  "_comment": "An Another World project brings the game as one file: a .zip of the game's folder - the DOS release's MEMLIST.BIN and BANK files, or the Amiga's or the Atari ST's BANK files - at its top or in a folder, names in any case. The core unpacks it at start into memory no savestate carries.",
+  "slots": [
+    {
+      "id": "game",
+      "title": "Game files",
+      "min": 1,
+      "max": 1,
+      "formats": [
+        "zip"
+      ],
+      "help": "A .zip of Another World's folder: the DOS release (MEMLIST.BIN and BANK01..BANK0D), the Amiga's or the Atari ST's (BANK01..BANK0D). The 15th and 20th Anniversary Editions, the Windows 3.1 and the 3DO releases are not played."
+    }
+  ]
+}

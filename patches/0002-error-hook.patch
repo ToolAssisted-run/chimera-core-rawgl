@@ -1,0 +1,26 @@
+diff --git a/util.cpp b/util.cpp
+index a740ce3..9f13933 100644
+--- a/util.cpp
++++ b/util.cpp
+@@ -21,6 +21,11 @@ void debug(uint16_t cm, const char *msg, ...) {
+ 	}
+ }
+ 
++/* rawgl_error_hook (weak, optional): whoever links the engine may take a fatal
++ * error instead of the process ending - a Chimera core halts the machine and
++ * reports the message. It does not return. */
++extern "C" void rawgl_error_hook(const char *msg) __attribute__((weak));
++
+ void error(const char *msg, ...) {
+ 	char buf[1024];
+ 	va_list va;
+@@ -28,6 +33,9 @@ void error(const char *msg, ...) {
+ 	vsprintf(buf, msg, va);
+ 	va_end(va);
+ 	fprintf(stderr, "ERROR: %s!\n", buf);
++	if (rawgl_error_hook) {
++		rawgl_error_hook(buf);
++	}
+ 	exit(-1);
+ }
+ 
