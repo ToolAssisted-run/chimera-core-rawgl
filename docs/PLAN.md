@@ -75,6 +75,18 @@ Amiga's music runs a little shorter than the DOS port's; the same sync points), 
 press up to 25 frames late here (10 on DOS): the local solver now waits for the game to act instead of counting
 frames.
 
+## The real French Amiga release (2026-09-30)
+
+TOSEC (archive.org "commodore-amiga-games-adf-a"), found for Sergio and downloaded by him: "Another World
+(1991)(Delphine)(FR)(Disk 1 of 2)[cp code wheel].zip" (E3E3C93DFC80FD9D8D9E392F05236235604A9363; its .adf
+D5993C7B998CF764B484B9ED4F5845754B70C814, volume "ANOTHER WORLD 1": the program, bank01, 02, 06, 09, 0B, 0C,
+0D, lisezmoi.txt) and "(Disk 2 of 2).zip" (45D1BDC92161B00631512FDC52B32D4294A5B681; its .adf
+1824246125A9A34C0E7DA0D45F79B447C8AED66A, volume "disk2": bank03, 04, 06, 07, 08, 09, 0A, 0C). bank01
+80BE9E506006DC70DFFBB10970D7C1096BFB5DFD, 244,674 bytes: rawgl's French Amiga table. The zips go in as they
+are. The protection answered twice (the local solver), the intro, level 1 - 3,980 steps: native == sandbox,
+rerecord, session. With the language setting "fr" the texts are French, and nothing but the picture changes.
+Not taken: SPS's IPF of the same release (the CAPS library's licence), the cracked TOSEC variants.
+
 ## The real Atari ST release (2026-09-30)
 
 Another World, Atari ST, TOSEC 2011 "(FR)(Disk 1 of 2)[!][protected]" and "Disk 2": Pasti (.stx) images, whose

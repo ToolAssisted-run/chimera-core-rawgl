@@ -99,8 +99,8 @@ the CM-32L is Munt's.
 
 ## What has been run
 
-**Every release but one has run on real data** (below): DOS and its demo, Amiga (English), Atari ST and its
-demo, 3DO, the 15th and 20th Anniversary Editions and Windows 3.1. Not yet: the Amiga's French release. Every
+**Every release has run on real data** (below): DOS and its demo, Amiga (English and French), Atari ST and its
+demo, 3DO, the 15th and 20th Anniversary Editions and Windows 3.1. Every
 release has also run as the core's **synthetic game** - its own bytecode, pictures, sounds and music written in that release's
 format (`waterbox/tests/make-synthetic.py`) - through the whole path its files take: native == sandbox,
 rerecord, session. That proves the core's side (the files, the step, the clock, the sound decoders, the
@@ -158,6 +158,12 @@ General MIDI SoundFont (FluidR3 GM, the test's; any the project brings), the fir
 native == sandbox, rerecord, session. MIDI costs: with a 148 MB General MIDI SoundFont the intro renders about
 six times faster than it plays, against ninety without music - fine to play, slower to seek through.
 
+**Another World (Amiga, French: TOSEC's "(FR)(Disk 1 of 2)[cp code wheel]" and "(Disk 2 of 2)", each a zipped
+.adf)**: the two zips as they come. rawgl knows the release by BANK01 (244,674 bytes). The copy protection
+(answered twice), the whole intro, the first level - 3,980 steps: native == sandbox, rerecord, session. The
+game's texts come from rawgl's tables by the language setting: French with "fr", the steps and the sound the
+same.
+
 **Out of This World, DOS demo (Interplay, 1992: `ootwdemo.zip`, archive.org's "OutOfThisWorldDemo")**: the
 zip as it is (MEMLIST.BIN, BANK01, 02, 05, 06 and 0D, DEMO3.JOY, the demo's own programs). No copy protection:
 the intro, then the first level (the pool, the first screens) until Lester dies - 3,640 steps: native ==
@@ -182,7 +188,7 @@ sandbox, rerecord, session; and chimera-run taking the .chd as its rom.
 | DOS | yes, and its effects on a CM-32L (with real CM-32L ROMs) | **yes**: Out of This World (US), the copy protection answered, its credits, the whole intro, the first level; native == sandbox, rerecord, session; and with the CM-32L |
 | DOS demo | (the DOS path, less the password screen) | **yes**: Interplay's 1992 demo (`ootwdemo.zip`), as it comes; the intro, the first level; native == sandbox, rerecord, session |
 | Amiga English | no (rawgl finds its resources by a built-in table keyed on BANK01's size) | **yes**: the two disks' files, the copy protection answered, the whole intro, the first level; native == sandbox, rerecord, session |
-| Amiga French | no (the same) | needs files |
+| Amiga French | no (the same) | **yes**: TOSEC's two zipped .adf as they are, the copy protection answered, the whole intro, the first level; native == sandbox, rerecord, session; its texts in French with the language setting |
 | Atari ST | no (the same) | **yes**: the two disks' files (TOSEC's Pasti images, "FR"), the copy protection answered, the whole intro, the first level; native == sandbox, rerecord, session |
 | Atari ST demo | no (the same, AW.TOS) | **yes**: ST Action's cover disk 28 (issue 44, December 1991), its .st or .stx as it is; the rolling intro; native == sandbox, rerecord, session |
 | 15th Anniversary Edition | yes: Pak01.pak, WAV sounds and music, original and remastered | **yes**: the European CD's installation; the whole intro with its music, the first level; native == sandbox, rerecord, session |
