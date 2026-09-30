@@ -6,8 +6,9 @@
 sound channels and music player, stepped one frame of the game at a time in miniBox's sandbox, packaged as
 `rawgl.chimeraCore`.
 
-**Built on upstream rawgl, with two patches**: the first serves the engine's file opens (and its `stat()`)
-from the project's file, the second hands a fatal error to the core before rawgl would exit. Everything else is
+**Built on upstream rawgl, with three patches**: the first serves the engine's file opens (and its `stat()`)
+from the project's file, the second hands a fatal error to the core before rawgl would exit, the third lets
+rawgl read two anniversary-edition installations it did not know (GOG's 20th, the 15th's European CD). Everything else is
 rawgl compiled from source - its script interpreter, its software renderer, its mixer (compiled as it is,
 against an SDL_mixer of the core's) - without its SDL and OpenGL frontend, which the core is instead. The
 core's SDL_mixer plays what rawgl asks of it with miniz, zlib, stb_vorbis and TinySoundFont, over its own
@@ -23,8 +24,9 @@ the CM-32L is Munt's.
     each disk's files (`waterbox/disks.c`) and merges them - a game on two disks is one folder to rawgl;
   - **the 3DO disc** - MAME's compressed image of it (.chd, read with libchdr: its first data track is what
     rawgl reads as the disc) or its image (.iso) - which comes alone;
-  - or **a .zip of the game's folder**, at its top or in a folder, names in any case (the anniversary
-    editions, Windows 3.1, or any release already copied off its disks).
+  - or **a .zip of the game's folder**, at its top or in a folder, names in any case: the anniversary editions'
+    and Windows 3.1's installed folders (the 15th's CD and GOG's 20th ship the game inside installers - NSIS,
+    Inno Setup - which the core does not open), or any release copied off its disks.
 
   The core unpacks the files into sealed memory at start (no savestate carries them) and reads a disc where it
   lies, a block at a time, holding nothing of the host's between two reads. The package
@@ -84,8 +86,8 @@ the CM-32L is Munt's.
 
 ## What has been run
 
-**The DOS, Amiga (English), Atari ST and 3DO releases have run on real data** (below). The other releases' real data
-has not been at hand yet. Every
+**Every release but three has run on real data** (below): DOS, Amiga (English), Atari ST, 3DO, the 15th and
+20th Anniversary Editions and Windows 3.1. Not yet: the Amiga's French release, the Atari ST demo, the DOS demo. Every
 release has also run as the core's **synthetic game** - its own bytecode, pictures, sounds and music written in that release's
 format (`waterbox/tests/make-synthetic.py`) - through the whole path its files take: native == sandbox,
 rerecord, session. That proves the core's side (the files, the step, the clock, the sound decoders, the
@@ -123,6 +125,25 @@ rawgl's own, per the language setting). The same run as the Amiga's - 3,767 step
 session - and the same machine to the picture and the step: the whole 4,600-step run's pictures and step
 lengths are the Amiga run's; only the sound is its own (the ST's samples).
 
+**Another World, 15th Anniversary Edition (Europe, En/Fr/Es: a Redump CD image)**: the CD holds the game
+inside an NSIS installer (`AnotherWorld_full.exe`: `Data/Pak01.pak` and the music), which a user installs, or
+opens with 7-Zip, and zips; the CD's `Menu/` (the language texts) may go in too, and the game runs without it.
+The original renderer; the intro (153 s) with its Ogg music (patch 0003), the first level to the leech and the
+edition's own continue screen - 3,097 steps: native == sandbox, rerecord, session. The pack has no sound 52,
+which the game asks for three times in the intro: silent, as rawgl warns.
+
+**Another World, 20th Anniversary Edition (GOG, 2.0)**: GOG's Inno Setup installer, opened (innoextract) and
+zipped; rawgl reads its layout with patch 0003. The original renderer draws the game's polygons and its 320x200
+pictures; the HD backgrounds (1728x1080 here) are not unpacked. The intro (153 s) with its Ogg music, the first
+level to the leech - 3,097 steps: native == sandbox, rerecord, session; the difficulty and remastered settings
+reach the script as with the synthetic game.
+
+**Out of This World, Windows 3.1**: the installed folder, zipped (BANK, WORLD.EXE, the two MIDI files). The copy
+protection (answered, the same screen), the intro (152 s) with its MIDI music, played by TinySoundFont with a
+General MIDI SoundFont (FluidR3 GM, the test's; any the project brings), the first level to the leech -
+native == sandbox, rerecord, session. MIDI costs: with a 148 MB General MIDI SoundFont the intro renders about
+six times faster than it plays, against ninety without music - fine to play, slower to seek through.
+
 **Out of This World (3DO, USA: a CHD, MAME's compressed image - one MODE1_RAW track of 164,290 frames)**: the
 project brings the .chd as it is; libchdr reads it (LZMA, zlib and FLAC hunks), a hunk at a time, through
 callbacks that open, read and close the mounted file, so a savestate holds nothing of the host's. The Interplay
@@ -138,9 +159,9 @@ sandbox, rerecord, session; and chimera-run taking the .chd as its rom.
 | Amiga French | no (the same) | needs files |
 | Atari ST | no (the same) | **yes**: the two disks' files (TOSEC's Pasti images, "FR"), the copy protection answered, the whole intro, the first level; native == sandbox, rerecord, session |
 | Atari ST demo | no (the same, AW.TOS) | needs files |
-| 15th Anniversary Edition | yes: Pak01.pak, WAV sounds and music, original and remastered | needs files |
-| 20th Anniversary Edition | yes: game/, gzip'd sounds, Ogg music, difficulty, original and remastered | needs files |
-| Windows 3.1 | yes: BANK (unpacked entries), its palettes, WAV, MIDI with a SoundFont | needs files (and a SoundFont) |
+| 15th Anniversary Edition | yes: Pak01.pak, WAV sounds and music, original and remastered | **yes**: the European CD's installation; the whole intro with its music, the first level; native == sandbox, rerecord, session |
+| 20th Anniversary Edition | yes: game/, gzip'd sounds, Ogg music, difficulty, original and remastered | **yes**: GOG's 2.0; the whole intro with its music, the first level; native == sandbox, rerecord, session |
+| Windows 3.1 | yes: BANK (unpacked entries), its palettes, WAV, MIDI with a SoundFont | **yes**: its folder, zipped; the copy protection answered, the intro with its MIDI music (a General MIDI SoundFont), the first level; native == sandbox, rerecord, session |
 | 3DO | yes: GameData/, a disc image and a CHD, logos and title, AIFF, SDX2, a coded cel | **yes**: Out of This World (USA), a CHD; the logos, the title, the whole intro, the first level; native == sandbox, rerecord, session; and through chimera-run |
 
 ## The patches
@@ -152,6 +173,12 @@ sandbox, rerecord, session; and chimera-run taking the .chd as its rom.
   built.
 - `0002-error-hook.patch`: `error()` calls a weak `rawgl_error_hook()` before it exits; the core's halts the
   machine instead.
+- `0003-anniversary-layouts.patch`: rawgl's 20th Anniversary reader knows the Linux/Steam layout (gzip'd
+  pictures in `game/BGZ`, texts in `game/TXT` or `game/TXT/Linux`); GOG's installation keeps plain `.bmp`
+  pictures in `game/BMP` and its texts in `game/TXT/Win32`, and rawgl now reads those too. Its 15th
+  Anniversary reader looks for the intro's and the end's music as `Music/AW/*.wav`; the European CD installs
+  them as `Music/Intro2004.ogg` and `Music/End2004.ogg`, which rawgl now falls back to. Additions only: the
+  layouts rawgl knew read as before.
 
 ## Building
 

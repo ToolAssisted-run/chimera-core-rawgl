@@ -1,0 +1,130 @@
+diff --git a/resource_nth.cpp b/resource_nth.cpp
+index 59fac48..f61d6e4 100644
+--- a/resource_nth.cpp
++++ b/resource_nth.cpp
+@@ -28,8 +28,10 @@ struct Resource15th: ResourceNth {
+ 	char *_textBuf;
+ 	const char *_stringsTable[157];
+ 	bool _hasRemasteredMusic;
++	char _rootPath[MAXPATHLEN];
+ 
+ 	Resource15th(const char *dataPath) {
++		snprintf(_rootPath, sizeof(_rootPath), "%s", dataPath);
+ 		snprintf(_dataPath, sizeof(_dataPath), "%s/Music/AW/RmSnd", dataPath);
+ 		struct stat s;
+ 		_hasRemasteredMusic = (stat(_dataPath, &s) == 0 && S_ISDIR(s.st_mode));
+@@ -203,6 +205,19 @@ struct Resource15th: ResourceNth {
+ 			}
+ 			break;
+ 		}
++		if (path) {
++			// the European CD's installation has its music as Ogg Vorbis in Music/
++			char buf[MAXPATHLEN];
++			snprintf(buf, sizeof(buf), "%s/%s", _rootPath, path);
++			struct stat s;
++			if (stat(buf, &s) != 0) {
++				const char *ogg = (num == 7) ? "Music/Intro2004.ogg" : "Music/End2004.ogg";
++				snprintf(buf, sizeof(buf), "%s/%s", _rootPath, ogg);
++				if (stat(buf, &s) == 0) {
++					path = ogg;
++				}
++			}
++		}
+ 		return path;
+ 	}
+ 
+@@ -264,9 +279,10 @@ struct Resource20th: ResourceNth {
+ 	uint8_t _musicType;
+ 	char _datName[32];
+ 	const char *_bitmapSize;
++	bool _bmpLayout; // GOG's installation: game/BMP/*.bmp in place of game/BGZ/*.bgz
+ 
+ 	Resource20th(const char *dataPath)
+-		: _dataPath(dataPath), _textBuf(0) {
++		: _dataPath(dataPath), _textBuf(0), _bmpLayout(false) {
+ 		memset(_stringsTable, 0, sizeof(_stringsTable));
+ 		_musicType = 0;
+ 		_datName[0] = 0;
+@@ -284,6 +300,13 @@ struct Resource20th: ResourceNth {
+ 			snprintf(path, sizeof(path), "%s/game/%s", _dataPath, dirs[i]);
+ 			struct stat s;
+ 			if (stat(path, &s) != 0 || !S_ISDIR(s.st_mode)) {
++				if (i == 0) {
++					snprintf(path, sizeof(path), "%s/game/BMP", _dataPath);
++					if (stat(path, &s) == 0 && S_ISDIR(s.st_mode)) {
++						_bmpLayout = true;
++						continue;
++					}
++				}
+ 				warning("'%s' is not a directory", path);
+ 				return false;
+ 			}
+@@ -302,7 +325,7 @@ struct Resource20th: ResourceNth {
+ 		_bitmapSize = 0;
+ 		for (int i = 0; bmps[i]; ++i) {
+ 			char path[MAXPATHLEN];
+-			snprintf(path, sizeof(path), "%s/game/BGZ/data%s", _dataPath, bmps[i]);
++			snprintf(path, sizeof(path), "%s/game/%s/data%s", _dataPath, _bmpLayout ? "BMP" : "BGZ", bmps[i]);
+ 			struct stat s;
+ 			if (stat(path, &s) == 0 && S_ISDIR(s.st_mode)) {
+ 				_bitmapSize = bmps[i];
+@@ -312,13 +335,36 @@ struct Resource20th: ResourceNth {
+ 		return true;
+ 	}
+ 
++	static uint8_t *loadPlain(const char *filepath) {
++		File f;
++		if (!f.open(filepath)) {
++			warning("Unable to open '%s'", filepath);
++			return 0;
++		}
++		const uint32_t size = f.size();
++		uint8_t *buf = (uint8_t *)malloc(size);
++		if (buf && f.read(buf, size) != (int)size) {
++			free(buf);
++			buf = 0;
++		}
++		return buf;
++	}
++
+ 	virtual uint8_t *load(const char *name) {
+ 		if (strcmp(name, "font.bmp") == 0) {
+ 			char path[MAXPATHLEN];
++			if (_bmpLayout) {
++				snprintf(path, sizeof(path), "%s/game/BMP/Font.bmp", _dataPath);
++				return loadPlain(path);
++			}
+ 			snprintf(path, sizeof(path), "%s/game/BGZ/Font.bgz", _dataPath);
+ 			return inflateGzip(path);
+ 		} else if (strcmp(name, "heads.bmp") == 0) {
+ 			char path[MAXPATHLEN];
++			if (_bmpLayout) {
++				snprintf(path, sizeof(path), "%s/game/BMP/Heads.bmp", _dataPath);
++				return loadPlain(path);
++			}
+ 			snprintf(path, sizeof(path), "%s/game/BGZ/Heads.bgz", _dataPath);
+ 			return inflateGzip(path);
+ 		}
+@@ -327,6 +373,14 @@ struct Resource20th: ResourceNth {
+ 
+ 	virtual uint8_t *loadBmp(int num) {
+ 		char path[MAXPATHLEN];
++		if (_bmpLayout) {
++			if (num >= 3000 && _bitmapSize) {
++				snprintf(path, sizeof(path), "%s/game/BMP/data%s/e%04d.bmp", _dataPath, _bitmapSize, num);
++			} else {
++				snprintf(path, sizeof(path), "%s/game/BMP/file%03d.bmp", _dataPath, num);
++			}
++			return loadPlain(path);
++		}
+ 		if (num >= 3000 && _bitmapSize) {
+ 			snprintf(path, sizeof(path), "%s/game/BGZ/data%s/%s_e%04d.bgz", _dataPath, _bitmapSize, _bitmapSize, num);
+ 		} else {
+@@ -468,6 +522,7 @@ struct Resource20th: ResourceNth {
+ 			static const char *fmt[] = {
+ 				"%s/game/TXT/%s.txt",
+ 				"%s/game/TXT/Linux/%s.txt",
++				"%s/game/TXT/Win32/%s.txt",
+ 				0
+ 			};
+ 			bool isOpen = false;

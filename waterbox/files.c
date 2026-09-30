@@ -130,13 +130,15 @@ static int marker_root(const char *path)
 	return -1;
 }
 
-/* 20th Anniversary Edition: its backgrounds come in eight sizes
- * (game/BGZ/data<W>x<H>/), of which the original renderer draws only the
- * 320x200 ones (rawgl video.cpp copyBitmapPtr): the others are not unpacked */
+/* 20th Anniversary Edition: its backgrounds come in up to eight sizes
+ * (game/BGZ/data<W>x<H>/, gzip'd; GOG's installation: game/BMP/data<W>x<H>/),
+ * of which the original renderer draws only the 320x200 ones (rawgl
+ * video.cpp copyBitmapPtr): the others are not unpacked */
 static int skipped(const char *rel)
 {
-	if (strncasecmp(rel, "game/bgz/data", 13)) return 0;
-	return strncasecmp(rel, "game/bgz/data320x200/", 21) != 0;
+	if (!strncasecmp(rel, "game/bgz/data", 13)) return strncasecmp(rel, "game/bgz/data320x200/", 21) != 0;
+	if (!strncasecmp(rel, "game/bmp/data", 13)) return strncasecmp(rel, "game/bmp/data320x200/", 21) != 0;
+	return 0;
 }
 
 /* the start of a file: its size, or -1 when it is not there */

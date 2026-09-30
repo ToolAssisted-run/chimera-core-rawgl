@@ -99,6 +99,30 @@ does, where this span shows bitmaps), the sound its own.
 A project brings the banks as a zip. The disks themselves (.st, .msa, .stx; the Amiga's .adf; the DOS
 floppy's .img) are not taken: that would be a slot of several disks and a reader for each format in the core.
 
+## The anniversary editions and Windows 3.1, real (2026-09-30)
+
+- **15th Anniversary Edition**, "Another World - 15th Anniversary Edition (Europe) (En,Fr,Es)": a Redump CD
+  image (MODE1/2352). Its ISO 9660 file system has the menus, fonts, extras and an NSIS installer
+  (`AnotherWorld_full.exe`, NSIS 2.25, LZMA solid) holding the game: `Data/Pak01.pak`
+  (FA30966472DD8758C7E035374DAF61CDAFD3178D, 112,704,009 bytes), `Music/Intro2004.ogg`, `Music/End2004.ogg`
+  (the installer carries two versions of each at the same path; the later one is what installs). rawgl's
+  15th reader wants the music as `Music/AW/Intro2004.wav` (another edition's layout): patch 0003 falls back to
+  the .ogg. The pack has no `file052.wav` (the intro asks for it three times; rawgl warns and plays nothing).
+  The core does not open NSIS installers (7-Zip's reader is thousands of lines): the project brings the
+  installed folder, zipped.
+- **20th Anniversary Edition**, GOG 2.0 (setup_another_world_20th_anniversary_edition_2.0_(68029).exe, Inno
+  Setup 5.6.2): the game in `game/`, but not as rawgl knew it - `game/BMP/*.bmp` plain (320x200 originals,
+  `Font.bmp`, `Heads.bmp`) and `game/BMP/data1728x1080/e*.bmp` for the HD backgrounds, in place of gzip'd
+  `game/BGZ`; texts in `game/TXT/Win32/` (and `Mac/`). Patch 0003 reads that layout too. The HD folder
+  (168 MB) is not unpacked: the original renderer does not draw it.
+- **Windows 3.1**, "win3_OOTW3x.zip": the installed folder (BANK 0418F8B72B8FD224ADC94128E05FCC452CF05A6C,
+  WORLD.EXE, X.MID, Y.MID) - a zip as it is. The copy protection's screen is the DOS one; its MIDI music needs
+  the soundfont slot (tested with FluidR3 GM, 148 MB: its samples are sealed, 296 MB as floats).
+  TinySoundFont's cost: ~8-12 s of the machine's host time per minute of intro music, against ~1.3 s without.
+
+All three ran the same route as the others (the protection where there is one, the whole intro, the first level
+to the leech): native == sandbox, rerecord, session.
+
 ## The releases as they come (2026-09-30)
 
 Sergio: "accept the disk images directly - same for the other disk-based platforms; same for 3DO: accept CHD

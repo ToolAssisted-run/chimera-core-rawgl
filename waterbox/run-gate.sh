@@ -45,7 +45,8 @@
 #                    [-c <chimera-run>] [-r <ROM dir>]
 #   -g adds the equivalence, rerecord and session legs on a real release (the
 #      zip of the game's folder, its disks' images - -g once for each - or the
-#      3DO's disc, .iso or .chd, as a project would bring them;
+#      3DO's disc, .iso or .chd, as a project would bring them, and a
+#      SoundFont (.sf2) for Windows 3.1's music;
 #      not in the repo): 2000 steps from power-on, or the steps of the movie -M
 #      names (a movie of your own, kept out of the repo)
 #   -c runs the engine leg with that chimera-run (build/dll/chimera-run of a
@@ -379,14 +380,23 @@ if [ -n "$game" ]; then
 	echo "== Another World ($(echo "$game" | tr '\n' ' ')${game_movie:+, $game_movie})"
 	mkdir -p "$work/game"
 	# the files under their own names, and a slot map naming them, as a
-	# project mounts them
+	# project mounts them: a SoundFont (.sf2) in the soundfont slot, the rest
+	# in the game slot
 	slots='{"game": ['
 	sep=''
+	sf=''
 	echo "$game" | while IFS= read -r f; do cp "$f" "$work/game/$(basename "$f")"; done
-	while IFS= read -r f; do slots="$slots$sep\"$(basename "$f")\""; sep=', '; done <<GAMES
+	while IFS= read -r f; do
+		case "$f" in
+			*.sf2|*.SF2) sf="$(basename "$f")" ;;
+			*) slots="$slots$sep\"$(basename "$f")\""; sep=', ' ;;
+		esac
+	done <<GAMES
 $game
 GAMES
-	printf '%s]}' "$slots" > "$work/game/slots"
+	slots="$slots]"
+	[ -n "$sf" ] && slots="$slots, \"soundfont\": [\"$sf\"]"
+	printf '%s}' "$slots" > "$work/game/slots"
 	gn=2000
 	gm=""
 	if [ -n "$game_movie" ]; then
