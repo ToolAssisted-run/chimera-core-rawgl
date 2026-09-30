@@ -48,6 +48,7 @@ done
 mb="$(cd "$mb" && pwd)"
 
 echo "== build (miniBox $mb)"
+mkdir -p "$root/build"
 make -C "$here" -f native.mk MB="$mb" -j"$(nproc)" > "$root/build/gate-native.log" 2>&1 || {
 	tail -20 "$root/build/gate-native.log"; echo "native build failed"; exit 1; }
 make -C "$here" -f guest.mk MB="$mb" -j"$(nproc)" > "$root/build/gate-guest.log" 2>&1 || {
