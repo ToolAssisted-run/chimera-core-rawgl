@@ -31,8 +31,8 @@ ECL_EXPORT int Init(void)
 	return rawgldrv_init(g_load_error, (int)sizeof g_load_error);
 }
 
-/* Jump and Back are the 3DO's: the frontend asks after Init and hides them
- * for the other releases */
+/* Jump is the 3DO's: the frontend asks after Init and hides it for the
+ * other releases */
 ECL_EXPORT int IsButtonActive(int32_t index) { return rawgldrv_button_active(index); }
 
 ECL_EXPORT void SetButton(int32_t index, int32_t state)

@@ -6,10 +6,10 @@
  * Wire format (waterbox.config "input.buttons", same order): the joystick
  * the game is played with (the arrows and the fire button, which the PC
  * keyboard's arrows and Space / Enter are; the 3DO pad's jump), then the
- * keyboard's commands - Code (C, the password screen), Pause (P) and the
- * 3DO's Back (its end menu) - then the letters and Backspace, which only the
- * password screen reads. Jump and Back exist on the 3DO only
- * (rawgldrv_button_active).
+ * keyboard's commands - Code (C, the password screen) and Pause (P) - then
+ * the letters and Backspace, which only the password screen reads. Jump
+ * exists on the 3DO only (rawgldrv_button_active). The 3DO's Back key (its
+ * end menu) is not a button: the menu cannot be opened (docs/PLAN.md).
  */
 #ifndef RAWGL_DRIVER_H
 #define RAWGL_DRIVER_H
@@ -30,7 +30,6 @@ enum RawglButton
 	RAWGL_BTN_JUMP,        /* the 3DO pad's jump (elsewhere Up jumps) */
 	RAWGL_BTN_CODE,        /* C: to the password screen */
 	RAWGL_BTN_PAUSE,       /* P */
-	RAWGL_BTN_BACK,        /* the 3DO's end menu (Escape) */
 	RAWGL_BTN_LETTER_A,    /* A..Z: the password screen's letters */
 	RAWGL_BTN_LETTER_Z = RAWGL_BTN_LETTER_A + 25,
 	RAWGL_BTN_BACKSPACE,   /* the password screen's rub-out */
@@ -59,7 +58,7 @@ void rawgldrv_set_button(int index, int down);
 /* runs the game to the end of its next step */
 void rawgldrv_frame(int render);
 const uint32_t *rawgldrv_video(int *w, int *h);
-/* whether the release being played has this button (Jump, Back: the 3DO's) */
+/* whether the release being played has this button (Jump: the 3DO's) */
 int rawgldrv_button_active(int index);
 const int16_t *rawgldrv_audio(int *samples);   /* stereo frames, left then right */
 int rawgldrv_input_was_read(void);

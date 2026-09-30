@@ -33,7 +33,7 @@ the CM-32L is Munt's.
   | 15th Anniversary Edition | Data/Pak01.pak | the intro | WAV sounds, WAV music (original or remastered) | original, 320x200 (see below) |
   | 20th Anniversary Edition | game/DAT/FILE017.DAT | the intro | gzip'd WAV sounds, Ogg Vorbis music (original or remastered) | original, 320x200 (see below) |
   | Windows 3.1 | BANK (+ WORLD.EXE) | the copy protection | WAV sounds, MIDI music (with the project's SoundFont) | original, 320x200 |
-  | 3DO | GameData/File340, or the disc image | its logos, title and menu | AIFF sounds, SDX2 AIFF-C songs | 15-bit colour, and its full-screen pictures |
+  | 3DO | GameData/File340, or the disc image | its logos and title | AIFF sounds, SDX2 AIFF-C songs | 15-bit colour, and its full-screen pictures |
 
   The anniversary editions run in rawgl's software renderer, as its "original" renderer draws them: the game's
   polygons and its 320x200 pictures, at 320x200. Their HD pictures (1280x800 and up) are drawn only by rawgl's
@@ -44,7 +44,7 @@ the CM-32L is Munt's.
   begin at the copy protection's symbols, as the originals did. Nothing of the core offers a way around it.
 - **A frame is one step of the game**: one frame the game shows, held for as many fiftieths of a second as its
   script says (`VAR_PAUSE_SLICES`; most of the game 4, 12.5 Hz), sixtieths on the 3DO. The pause, and the
-  3DO's logos, title and menus, are 50 ms steps while the game waits. `GetVsyncNumerator/Denominator` report
+  3DO's logos and title, are 50 ms steps while the game waits. `GetVsyncNumerator/Denominator` report
   the step just run (1000 / its milliseconds). A step is cut at a second of the machine's time.
 - **Time is the machine's**: rawgl's clock (`getTimeStamp`) is a counter only the game's own waits move, and a
   wait runs the engine's mixer for exactly the samples it covers - the music player tells the script where it
@@ -52,11 +52,11 @@ the CM-32L is Munt's.
   readings of the wall clock (the random seed, the 20th's `srand`) are the **Random seed** setting, and its
   `rand()` is one generator in every build.
 - **The controls are rawgl's**: P1 Up, Down, Left, Right (Up jumps, Down crouches), Action (fire: Space or
-  Enter) and, on the 3DO, Jump (Shift); then Code (C), Pause (P) and, on the 3DO, Back (Escape, its end
-  menu); then the letters and Backspace, which only the password screen reads. A button pressed is a key going
-  down and a button let go a key coming up, as rawgl's SDL frontend sees them - so where the game takes a
-  press (a menu, a picture it waits on), a button still held is not pressed again until it is let go. Jump and
-  Back exist on the 3DO only (`IsButtonActive`).
+  Enter) and, on the 3DO, Jump (Shift); then Code (C) and Pause (P); then the letters and Backspace, which
+  only the password screen reads. A button pressed is a key going down and a button let go a key coming up, as
+  rawgl's SDL frontend sees them - so where the game takes a press (the title, a picture it waits on), a button
+  still held is not pressed again until it is let go. Jump exists on the 3DO only (`IsButtonActive`). The 3DO's
+  Back key, which opens its end menu, is not offered: its "yes" stops rawgl (docs/PLAN.md).
 - **Settings**: Language, Random seed (0..65535), Difficulty (the 20th's, rawgl's `--difficulty`),
   Remastered Sound (the anniversary editions', rawgl's `--audio`) and MT-32 Sound Effects (the DOS release's,
   rawgl's `--mt32`).

@@ -1,7 +1,7 @@
 # the synthetic game (make-synthetic.py --release 3do): the logos and the title,
-# then 16001 and 16003 - the pad's jump, fire, the pause and its picture, the
-# Back menu, Code, the password screen
-# U D L R the pad, A fire, J jump, C Code, P Pause, E Back, a..z letters
+# then 16001 and 16003 - the pad's jump, fire, the pause and its picture, Code,
+# the password screen
+# U D L R the pad, A fire, J jump, C Code, P Pause, a..z letters
 
 
 A
@@ -68,11 +68,6 @@ P
 P
 
 
-E
-
-R
-
-A
 
 
 C

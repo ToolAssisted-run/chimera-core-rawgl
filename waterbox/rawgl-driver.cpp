@@ -157,10 +157,10 @@ void apply_input(PlayerInput &pi)
 	if (g.released[RAWGL_BTN_ACTION]) pi.action = false;
 	if (g.pressed[RAWGL_BTN_JUMP]) pi.jump = true;
 	if (g.released[RAWGL_BTN_JUMP]) pi.jump = false;
-	/* a key typed: once */
+	/* a key typed: once. rawgl's Back (the 3DO's end menu) is never pressed:
+	 * the menu is not offered (docs/PLAN.md) */
 	if (g.pressed[RAWGL_BTN_CODE]) pi.code = true;
 	if (g.pressed[RAWGL_BTN_PAUSE]) pi.pause = true;
-	if (g.pressed[RAWGL_BTN_BACK]) pi.back = true;
 	for (int i = 0; i < 26; i++)
 		if (g.pressed[RAWGL_BTN_LETTER_A + i]) pi.lastChar = (char)('a' + i);
 	if (g.pressed[RAWGL_BTN_BACKSPACE]) pi.lastChar = 8;
@@ -409,7 +409,7 @@ const uint32_t *rawgldrv_video(int *w, int *h)
 
 int rawgldrv_button_active(int index)
 {
-	if (index == RAWGL_BTN_JUMP || index == RAWGL_BTN_BACK) return g.release == Resource::DT_3DO;
+	if (index == RAWGL_BTN_JUMP) return g.release == Resource::DT_3DO;
 	return index >= 0 && index < RAWGL_BTN_COUNT;
 }
 

@@ -13,8 +13,7 @@
 #   releases     the synthetic game as the 15th and 20th Anniversary Editions,
 #                Windows 3.1 and the 3DO (its folder, and its disc image read
 #                in place): native = sandbox, rerecord, session, each; the
-#                3DO's folder and disc the same machine; Jump and Back the
-#                3DO's only; the SoundFont changes Windows 3.1's sound and
+#                3DO's folder and disc the same machine; Jump the 3DO's only; the SoundFont changes Windows 3.1's sound and
 #                nothing else
 #   settings     randomSeed is what the script's seed starts at, language what
 #                the DOS copy protection's title choice reads, difficulty and
@@ -152,8 +151,8 @@ for rel in 15th 20th win31 3do 3do-iso; do
 	same "releases ($rel)" "$d/s" "$d/w" "session at step $((n * 3 / 5)) = straight"
 done
 same "releases (3do)" "$work/rel-3do-iso/n" "$work/rel-3do/n" "the disc image, read in place = the GameData folder"
-if [ "$(value "$work/rel-3do/n" activeButtons)" = 36 ] && [ "$(value "$work/rel-15th/n" activeButtons)" = 34 ]; then
-	pass "releases: Jump and Back are the 3DO's only (36 buttons there, 34 elsewhere)"
+if [ "$(value "$work/rel-3do/n" activeButtons)" = 35 ] && [ "$(value "$work/rel-15th/n" activeButtons)" = 34 ]; then
+	pass "releases: Jump is the 3DO's only (35 buttons there, 34 elsewhere)"
 else
 	fail "releases: active buttons 3DO $(value "$work/rel-3do/n" activeButtons), 15th $(value "$work/rel-15th/n" activeButtons)"
 fi

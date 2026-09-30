@@ -68,7 +68,7 @@ in its own format (native == sandbox, rerecord, session), none yet on real data:
 - **The picture's live size**: the 3DO's and Windows 3.1's full-screen pictures (`drawBitmapOverlay`) at their
   own size, up to 640x480 (the 3DO's pause picture is 320x240); the game's pages 320x200.
 - **The 3DO** runs in 15-bit colour (rawgl's software renderer with `_use555`, as rawgl picks for it), with its
-  pad's Jump and its Back menu as buttons only it has (`IsButtonActive`).
+  pad's Jump as a button only it has (`IsButtonActive`). Its Back key is not a button at all (below).
 - **Settings**: difficulty (the 20th's) and remasteredAudio (the anniversary editions'), which rawgl hands to the
   20th's script (variables 0xBF, 0xDE) and uses to pick sound files.
 
@@ -96,9 +96,12 @@ Found in rawgl, not changed:
 
 - **The 3DO's Back menu, "yes"**: Engine::run sends the game to its title when the script asks for part 16000,
   but leaves `_res._nextPart` at 16000, so after the title restarts the game, setupTasks asks for 16000 again and
-  Resource::setupPart stops with "invalid part" (the 3DO has no part 16000). Upstream's SDL build exits there;
-  the core halts with that message. The fix is one line (clear `_nextPart` when going to the title) - a patch,
-  if Sergio wants it, or a report upstream.
+  Resource::setupPart stops with "invalid part" (the 3DO has no part 16000). Upstream's SDL build exits there.
+  Sergio's decision (2026-09-30): the menu is not offered at all - there is no Back button, rawgl's `back` flag
+  is never set, so the menu cannot open and the bug cannot be reached. rawgl is unchanged.
+- **The 3DO's ending, probably the same** (read, not run): the end credits are asked for as part 16009, which
+  Engine::run also leaves pending; after the credits and the title, setupTasks would load 16009 - a real
+  number, the password screen - instead of the part chosen. To see with the real 3DO data.
 - **Windows 3.1's logos** (`kStateLogoWin31`) cannot be reached: Engine::setup moves Windows 3.1 to the copy
   protection before it checks for the intro, where the logos would play.
 
