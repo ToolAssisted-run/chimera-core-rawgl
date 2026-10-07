@@ -255,7 +255,7 @@ for an AI coding agent.
 
 ## The gate
 
-`./waterbox/run-gate.sh [-m <miniBox>] [-c <chimera-run>] [-g <Another World zip or iso>] [-r <ROM dir>]`. Another World's data is
+`./waterbox/run-gate.sh [-m <miniBox>] [-c <chimera-run>] [-g [<id>=]<file>]... [-r <ROM dir>]`. Another World's data is
 not the core's to carry, so the gate's content is **a game of its own**: `tests/make-synthetic.py` writes a
 four-part "game" - its own bytecode, palettes, polygons, sounds and music - in each release's format, which
 goes through the same path that release's files take: a copy-protection part to start at (or the 3DO's logos
