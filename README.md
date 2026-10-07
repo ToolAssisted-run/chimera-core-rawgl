@@ -228,6 +228,14 @@ sandbox, rerecord, session; and chimera-run taking the .chd as its rom.
   them as `Music/Intro2004.ogg` and `Music/End2004.ogg`, which rawgl now falls back to. Additions only: the
   layouts rawgl knew read as before.
 
+## Using it in Chimera
+
+Chimera ships no cores and downloads nothing. Download the core's `.chimeraCore` package from this repository's
+[Releases](https://github.com/ToolAssisted-run/chimera-core-rawgl/releases) page (a rolling `dev` build, dated
+`nightly-YYYY-MM-DD` builds), or build it, and put it in the `Cores` folder beside `Chimera.exe` (or the folder
+chosen in File > Core Manager > Change folder...). The same file works on Linux and on Windows. The game's own
+files are not in the package: a project brings its release's files as firmware (the table above).
+
 ## Building
 
 ```
@@ -239,7 +247,11 @@ make -C waterbox -f guest.mk -j$(nproc)     # core.wbx
 
 miniBox is taken from `MB=`/`MINIBOX_DIR` (`-m` for the scripts), else `~/chimera/extern/chimera-common-minibox`,
 with its C++ guest toolchain built (`meson setup build/meson-cpp -Dguest_cpp=true`). The patches go onto
-`extern/rawgl` on the first build (`waterbox/apply-patches.sh`, all or nothing).
+`extern/rawgl` on the first build (`waterbox/apply-patches.sh`, all or nothing). `./waterbox/build-package.sh -r
+<chimera>` writes the package into a Chimera source checkout's `build/Cores` instead.
+
+The whole build, as CI does it, is in [docs/BUILDING.md](docs/BUILDING.md); [AGENTS.md](AGENTS.md) is the guide
+for an AI coding agent.
 
 ## The gate
 
