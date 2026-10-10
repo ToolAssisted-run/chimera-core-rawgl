@@ -1,4 +1,4 @@
 {
-  "_comment": "No files: an Another World project picks its release (the System: waterbox.config's machines) and brings that release's own files as firmware (waterbox.config's firmware entries, each required by the release setting), so the wizard skips its files step.",
+  "_comment": "This file lists the kinds of file a project of this core can hold, and it lists none. An Another World project chooses its release (the System, one of the machines in waterbox.config) and supplies that release's own files as firmware (the firmware entries in waterbox.config, each required according to the Release setting). The New Project window therefore skips its files page.",
   "slots": []
 }
