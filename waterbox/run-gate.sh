@@ -523,8 +523,11 @@ fire = "|" + "." * 29 + "|" + "....F" + "|"
 open(sys.argv[1], "w").write("\n".join([idle] * 10 + [fire] + [idle] * 49) + "\n")
 PY
 	part() { python3 -c "import struct, sys; print(struct.unpack('<H', open(sys.argv[1], 'rb').read()[:2])[0])" "$1"; }
-	( cd "$work" && "$chimera_run" "$work/package/rawgl.chimeraCore" "$work/synth/game.zip" "$work/engine.txt" --firmware "dos-disk=$work/synth/game.zip" --dump "Game State=$work/engine.gs" ) > "$work/engine.out" 2>&1 || true
-	( cd "$work" && "$chimera_run" "$work/package/rawgl.chimeraCore" "$work/synth/game.zip" "$work/engine.txt" --rerecord --firmware "dos-disk=$work/synth/game.zip" --dump "Game State=$work/engine-r.gs" ) > "$work/engine-r.out" 2>&1 || true
+	# a game runs only in a project (Chimera, 2026-10-26): one of no file (the
+	# package takes none), the release's files its firmware, and the movie
+	( cd "$work" && "$chimera_run" --new-project "$work/engine.chimeraProject" "$work/package/rawgl.chimeraCore" --movie "$work/engine.txt" --firmware "dos-disk=$work/synth/game.zip" ) > "$work/engine.make.out" 2>&1 || true
+	( cd "$work" && "$chimera_run" --project "$work/engine.chimeraProject" "$work/package/rawgl.chimeraCore" --firmware "dos-disk=$work/synth/game.zip" --dump "Game State=$work/engine.gs" ) > "$work/engine.out" 2>&1 || true
+	( cd "$work" && "$chimera_run" --project "$work/engine.chimeraProject" "$work/package/rawgl.chimeraCore" --rerecord --firmware "dos-disk=$work/synth/game.zip" --dump "Game State=$work/engine-r.gs" ) > "$work/engine-r.out" 2>&1 || true
 	if [ -f "$work/engine.gs" ] && [ "$(part "$work/engine.gs")" = 16003 ] && cmp -s "$work/engine.gs" "$work/engine-r.gs"; then
 		pass "engine: chimera-run plays fire at step 10 to part 16003 by step 60, the same with --rerecord"
 	else
