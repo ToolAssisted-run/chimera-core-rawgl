@@ -35,18 +35,14 @@ Linux only (CI: `ubuntu-latest`). `<chimera>` is a Chimera checkout.
 
 ```
 sudo apt-get update
-sudo apt-get install -y --no-install-recommends meson ninja-build build-essential cmake pkg-config python3 mono-complete xvfb libgl1-mesa-dev libegl-dev libx11-dev libxext-dev libasound2-dev python3-pip
+sudo apt-get install -y --no-install-recommends meson ninja-build build-essential cmake pkg-config python3 libgl1-mesa-dev libegl-dev libx11-dev libxext-dev libasound2-dev python3-pip
 
 git submodule update --init --recursive
 git clone --recursive https://github.com/ToolAssisted-run/chimera.git <chimera>
 
-# Chimera itself: chimera-run (the gate's engine leg) and the contract tests.
-# The dotnet line needs the .NET SDK 8.0.
-cd <chimera>
-meson setup build/meson-linux --prefix "$PWD/build" --libdir dll
-meson compile -C build/meson-linux
-meson install -C build/meson-linux
-dotnet build source/gui/Chimera.sln -c Release /nodeReuse:false -p:UseSharedCompilation=false
+# Chimera itself, with its window: chimera-run (the gate's engine leg) and the
+# contract tests. The script installs Qt 6.12 (from Qt's own archives, with aqt).
+<chimera>/tools/ci-chimera.sh
 
 # miniBox: the sandbox host and the C++ guest toolchain
 mb=<chimera>/extern/chimera-common-minibox
@@ -88,8 +84,8 @@ tree has changes) and is for testing. CI stamps the commit through
 Chimera ships no cores and downloads nothing: a core is a file in its cores
 folder. In a source checkout that is `<chimera>/build/Cores/`, where
 `build-package.sh -r <chimera>` writes. In a release bundle it is the `Cores`
-folder beside `Chimera.exe`, or the one chosen in File > Core Manager >
-Change folder... File > Core Manager lists the folder; Refresh List rescans
+folder beside Chimera's program, or the one chosen in Tools > Core Manager... >
+Change folder... Tools > Core Manager... lists the folder; Refresh List rescans
 it. The same package works on Linux and on Windows.
 
 ## Test before you commit
@@ -110,9 +106,7 @@ Then, with the package in `<chimera>/build/Cores`, Chimera's contract tests:
 
 ```
 cd <chimera>
-CHIMERA_CORES_DIR=<chimera>/build/Cores dotnet test source/gui/Chimera.Tests.Client.Common/Chimera.Tests.Client.Common.csproj \
-  -c Release --nologo \
-  --filter "FullyQualifiedName~InstalledCorePackagesTests|FullyQualifiedName~MnemonicUniquenessTests"
+CHIMERA_CORES_DIR=<chimera>/build/Cores <chimera>/build/meson-linux/source/ui/test-packages
 ```
 
 ## Rules of this repository

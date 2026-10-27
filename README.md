@@ -232,8 +232,8 @@ sandbox, rerecord, session; and chimera-run taking the .chd as its rom.
 
 Chimera ships no cores and downloads nothing. Download the core's `.chimeraCore` package from this repository's
 [Releases](https://github.com/ToolAssisted-run/chimera-core-rawgl/releases) page (a rolling `dev` build, dated
-`nightly-YYYY-MM-DD` builds), or build it, and put it in the `Cores` folder beside `Chimera.exe` (or the folder
-chosen in File > Core Manager > Change folder...). The same file works on Linux and on Windows. The game's own
+`nightly-YYYY-MM-DD` builds), or build it, and put it in the `cores` folder beside Chimera's program (or the folder
+chosen in Tools > Core Manager... > Change folder...). The same file works on Linux and on Windows. The game's own
 files are not in the package: a project brings its release's files as firmware (the table above).
 
 ## Building
