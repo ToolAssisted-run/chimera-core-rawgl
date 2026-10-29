@@ -48,6 +48,11 @@
 #include "rawgl-driver.h"
 #include "rawgl-files.h"
 
+/* A text a person reads is a key of languages/en.json, each of its
+ * arguments after a TEXT_ARG (chimera docs/translations.md). TEXT_ARG is a
+ * string of its own so the byte after it is never read as more of its hex. */
+#define TEXT_ARG "\x1f"
+
 /* what upstream's main.cpp defines: the renderer's and the script's options */
 bool Graphics::_is1991 = false;
 bool Graphics::_use555 = false;
@@ -274,10 +279,10 @@ void game_main()
 	if (type == Resource::DT_WIN31 && g.settings.soundfont)
 	{
 		FILE *sf2 = rawgl_files_soundfont();
-		if (!sf2) halt("the SoundFont music needs a General MIDI SoundFont: soundfont.sf2 is not there");
+		if (!sf2) halt("error.no_soundfont");
 		const int ok = midi_load_soundfont(sf2);
 		fclose(sf2);
-		if (!ok) halt("soundfont.sf2 is not a SoundFont TinySoundFont can read (a .sf2 file)");
+		if (!ok) halt("error.bad_soundfont");
 	}
 	/* the DOS release's sound effects on a Roland CM-32L (rawgl's --mt32):
 	 * Munt, with the ROMs rawgl opens by name, which the project brings as
@@ -293,7 +298,7 @@ void game_main()
 			FILE *f = fopen(rom, "rb");
 			if (!f)
 			{
-				snprintf(msg, sizeof msg, "the MT-32 sound effects need the CM-32L's ROMs: %s is not there", rom);
+				snprintf(msg, sizeof msg, "error.mt_32_sound_effects_need_the" TEXT_ARG "%s", rom);
 				halt(msg);
 			}
 			fclose(f);
@@ -303,7 +308,7 @@ void game_main()
 			mt32emu_free_context(c);
 			if (rc != MT32EMU_RC_ADDED_CONTROL_ROM && rc != MT32EMU_RC_ADDED_PCM_ROM)
 			{
-				snprintf(msg, sizeof msg, "%s is not a Roland ROM Munt knows (a CM-32L's, or an MT-32's)", rom);
+				snprintf(msg, sizeof msg, "error.is_not_a_roland_rom_munt" TEXT_ARG "%s", rom);
 				halt(msg);
 			}
 		}
@@ -357,21 +362,21 @@ int rawgldrv_init(char *err, int errsize)
 	rawgl_settings_read(&g.settings);
 	if (g.settings.random_seed < 0 || g.settings.random_seed > 65535)
 	{
-		snprintf(err, (size_t)errsize, "the setting randomSeed is %ld; it goes from 0 to 65535", g.settings.random_seed);
+		snprintf(err, (size_t)errsize, "error.setting_randomseed_is_it" TEXT_ARG "%ld", g.settings.random_seed);
 		return 0;
 	}
 	if (!rawgl_files_load(err, errsize)) return 0;
 	g.co = coro_create(game_main, 1 << 20);
 	if (!g.co)
 	{
-		snprintf(err, (size_t)errsize, "no memory for the game's stack");
+		snprintf(err, (size_t)errsize, "error.no_memory_for_the_game_s");
 		return 0;
 	}
 	g.render = 1;
 	coro_resume(g.co);
 	if (g.halted || !g.init_done)
 	{
-		snprintf(err, (size_t)errsize, "%s", g.halted ? g.error : "the game did not start");
+		snprintf(err, (size_t)errsize, "%s", g.halted ? g.error : "error.not_started");
 		return 0;
 	}
 	return 1;
@@ -496,37 +501,37 @@ int rawgldrv_domain_writable(int i) { return i == 1; }
  * and those Another World's script keeps Lester and the world in (the names
  * JaffarPlus's Another World gives them, games/raw/anotherWorld) */
 static const struct { int var; const char *name, *group, *desc; } k_vars[] = {
-	{ 0x01, "Lester.X", "Lester", "Horizontal position in the room" },
-	{ 0x02, "Lester.Y", "Lester", "Vertical position in the room" },
-	{ 0x03, "Lester.Dead State", "Lester", "Nonzero while Lester dies" },
-	{ 0x06, "Lester.Gun Ammo", "Lester", "The gun's charge" },
-	{ 0x0A, "Lester.Has Gun", "Lester", "Nonzero once Lester has the gun" },
-	{ 0x0F, "Lester.Gun Load", "Lester", "The shot being charged (also the animation state)" },
-	{ 0x14, "World.Elevator Y", "World", "An elevator's vertical position" },
+	{ 0x01, "Lester.X", "Lester", "property.lester_x" },
+	{ 0x02, "Lester.Y", "Lester", "property.lester_y" },
+	{ 0x03, "Lester.Dead State", "Lester", "property.lester_dead_state" },
+	{ 0x06, "Lester.Gun Ammo", "Lester", "property.lester_gun_ammo" },
+	{ 0x0A, "Lester.Has Gun", "Lester", "property.lester_has_gun" },
+	{ 0x0F, "Lester.Gun Load", "Lester", "property.lester_gun_load" },
+	{ 0x14, "World.Elevator Y", "World", "property.world_elevator_y" },
 	{ 0x15, "Lester.Momentum 1", "Lester", "" },
 	{ 0x16, "Lester.Momentum 2", "Lester", "" },
 	{ 0x17, "Lester.Momentum 3", "Lester", "" },
 	{ 0x2A, "World.Script State", "World", "" },
 	{ 0x2B, "World.Script State 2", "World", "" },
-	{ 0x31, "World.Timer", "World", "A countdown the level's script runs" },
-	{ 0x3C, "Engine.Random Seed", "Engine", "The script's random number generator (the randomSeed setting starts it)" },
-	{ 0x63, "Lester.Direction", "Lester", "Also Lester's state" },
-	{ 0x66, "Lester.Room", "Lester", "The room Lester is in" },
-	{ 0x67, "Engine.Screen", "Engine", "The screen shown (VAR_SCREEN_NUM)" },
-	{ 0x68, "Alien.X", "Alien", "The alien's horizontal position" },
-	{ 0x6A, "Alien.Room", "Alien", "The room the alien is in" },
+	{ 0x31, "World.Timer", "World", "property.world_timer" },
+	{ 0x3C, "Engine.Random Seed", "Engine", "property.engine_random_seed" },
+	{ 0x63, "Lester.Direction", "Lester", "property.lester_direction" },
+	{ 0x66, "Lester.Room", "Lester", "property.lester_room" },
+	{ 0x67, "Engine.Screen", "Engine", "property.engine_screen" },
+	{ 0x68, "Alien.X", "Alien", "property.alien_x" },
+	{ 0x6A, "Alien.Room", "Alien", "property.alien_room" },
 	{ 0x6B, "Alien.State", "Alien", "" },
-	{ 0xDA, "Engine.Last Key", "Engine", "The letter typed on the password screen (VAR_LAST_KEYCHAR)" },
-	{ 0xE5, "Engine.Hero Up Down", "Engine", "The joystick's up / down, as the game reads it (VAR_HERO_POS_UP_DOWN; Lester's swimming)" },
+	{ 0xDA, "Engine.Last Key", "Engine", "property.engine_last_key" },
+	{ 0xE5, "Engine.Hero Up Down", "Engine", "property.engine_hero_up_down" },
 	{ 0xE8, "World.Fumes State", "World", "" },
-	{ 0xF4, "Engine.Music Sync", "Engine", "What the music last told the script (VAR_MUSIC_SYNC)" },
-	{ 0xF9, "Engine.Scroll Y", "Engine", "The screen's vertical scroll (VAR_SCROLL_Y)" },
-	{ 0xFA, "Engine.Hero Action", "Engine", "The fire button, as the game reads it (VAR_HERO_ACTION)" },
+	{ 0xF4, "Engine.Music Sync", "Engine", "property.engine_music_sync" },
+	{ 0xF9, "Engine.Scroll Y", "Engine", "property.engine_scroll_y" },
+	{ 0xFA, "Engine.Hero Action", "Engine", "property.engine_hero_action" },
 	{ 0xFB, "Engine.Hero Jump Down", "Engine", "VAR_HERO_POS_JUMP_DOWN" },
 	{ 0xFC, "Engine.Hero Left Right", "Engine", "VAR_HERO_POS_LEFT_RIGHT" },
 	{ 0xFD, "Engine.Hero Pos Mask", "Engine", "VAR_HERO_POS_MASK" },
 	{ 0xFE, "Engine.Hero Action Pos Mask", "Engine", "VAR_HERO_ACTION_POS_MASK" },
-	{ 0xFF, "Engine.Pause Slices", "Engine", "The frame's length in fiftieths of a second (VAR_PAUSE_SLICES)" },
+	{ 0xFF, "Engine.Pause Slices", "Engine", "property.engine_pause_slices" },
 };
 
 const char *rawgldrv_game_properties(void)
@@ -538,11 +543,11 @@ const char *rawgldrv_game_properties(void)
 	P("{\n  \"properties\": [\n");
 	P("    { \"name\": \"Game.Part\", \"domain\": \"Game State\", \"offset\": 0, \"type\": \"u16\", \"group\": \"Game\", \"writable\": false, "
 	  "\"values\": { \"16000\": \"Copy Protection\", \"16001\": \"Intro\", \"16002\": \"Water\", \"16003\": \"Prison\", \"16004\": \"Cite\", "
-	  "\"16005\": \"Arena\", \"16006\": \"Luxe\", \"16007\": \"Final\", \"16008\": \"Password\" }, \"description\": \"The part of the game being played\" },\n");
+	  "\"16005\": \"Arena\", \"16006\": \"Luxe\", \"16007\": \"Final\", \"16008\": \"Password\" }, \"description\": \"property.game_part\" },\n");
 	P("    { \"name\": \"Game.Next Part\", \"domain\": \"Game State\", \"offset\": 2, \"type\": \"u16\", \"group\": \"Game\", \"writable\": false, "
-	  "\"description\": \"The part the game goes to at its next frame (0: none)\" },\n");
+	  "\"description\": \"property.game_next_part\" },\n");
 	P("    { \"name\": \"Game.Screen\", \"domain\": \"Game State\", \"offset\": 4, \"type\": \"s16\", \"group\": \"Game\", \"writable\": false, "
-	  "\"description\": \"The screen the script last loaded\" },\n");
+	  "\"description\": \"property.game_screen\" },\n");
 	P("    { \"name\": \"Game.Release\", \"domain\": \"Game State\", \"offset\": 6, \"type\": \"u8\", \"group\": \"Game\", \"writable\": false, \"values\": {");
 	for (int t = Resource::DT_DOS; t <= Resource::DT_ATARI_DEMO; t++)
 		P("%s \"%d\": \"%s\"", t ? "," : "", t, release_name((Resource::DataType)t));
@@ -551,10 +556,10 @@ const char *rawgldrv_game_properties(void)
 	  "\"values\": { \"0\": \"French\", \"1\": \"English\", \"2\": \"German\", \"3\": \"Spanish\", \"4\": \"Italian\" } },\n");
 	P("    { \"name\": \"Machine.Steps\", \"domain\": \"Game State\", \"offset\": 8, \"type\": \"u64\", \"group\": \"Machine\", \"writable\": false },\n");
 	P("    { \"name\": \"Machine.Time Ms\", \"domain\": \"Game State\", \"offset\": 16, \"type\": \"u64\", \"group\": \"Machine\", \"writable\": false, "
-	  "\"description\": \"The machine's time since it started, in milliseconds\" },\n");
+	  "\"description\": \"property.machine_time_ms\" },\n");
 	P("    { \"name\": \"Machine.Music Playing\", \"domain\": \"Game State\", \"offset\": 24, \"type\": \"bool\", \"group\": \"Machine\", \"writable\": false },\n");
 	P("    { \"name\": \"Machine.Halted\", \"domain\": \"Game State\", \"offset\": 25, \"type\": \"bool\", \"group\": \"Machine\", \"writable\": false, "
-	  "\"description\": \"The engine stopped on an error\" },\n");
+	  "\"description\": \"property.machine_halted\" },\n");
 	for (size_t i = 0; i < sizeof k_vars / sizeof k_vars[0]; i++)
 	{
 		P("    { \"name\": \"%s\", \"domain\": \"Script Variables\", \"offset\": %d, \"type\": \"s16\", \"group\": \"%s\"", k_vars[i].name, k_vars[i].var * 2, k_vars[i].group);

@@ -52,6 +52,11 @@
 #include "miniz.h"
 #include "rawgl-files.h"
 
+/* A text a person reads is a key of languages/en.json, each of its
+ * arguments after a TEXT_ARG (chimera docs/translations.md). TEXT_ARG is a
+ * string of its own so the byte after it is never read as more of its hex. */
+#define TEXT_ARG "\x1f"
+
 struct gfile
 {
 	char path[256];   /* relative to the game's folder, as stored */
@@ -254,13 +259,13 @@ static int open_chd(char *err, int errsize)
 {
 	if (chd_open_core_file_callbacks(&k_chd_io, NULL, CHD_OPEN_READ, NULL, &g_chd) != CHDERR_NONE)
 	{
-		snprintf(err, (size_t)errsize, "%s is not a CHD libchdr can read", g_zip_name);
+		snprintf(err, (size_t)errsize, "error.is_not_a_chd_libchdr_can" TEXT_ARG "%s", g_zip_name);
 		return 0;
 	}
 	const chd_header *h = chd_get_header(g_chd);
 	if (h->unitbytes != CD_FRAME_SIZE || h->hunkbytes % CD_FRAME_SIZE)
 	{
-		snprintf(err, (size_t)errsize, "%s is a CHD of a hard disk or a laserdisc, not of a CD", g_zip_name);
+		snprintf(err, (size_t)errsize, "error.is_a_chd_of_a_hard_disk_or_a" TEXT_ARG "%s", g_zip_name);
 		return 0;
 	}
 	g_chd_fph = h->hunkbytes / CD_FRAME_SIZE;
@@ -288,7 +293,7 @@ static int open_chd(char *err, int errsize)
 		}
 		start += ((uint32_t)frames + CD_TRACK_PADDING - 1) / CD_TRACK_PADDING * CD_TRACK_PADDING;
 	}
-	snprintf(err, (size_t)errsize, "%s holds no data track (MODE1) for rawgl to read", g_zip_name);
+	snprintf(err, (size_t)errsize, "error.holds_no_data_track_mode1" TEXT_ARG "%s", g_zip_name);
 	return 0;
 }
 
@@ -326,9 +331,8 @@ static int is_iso9660_pvd(const uint8_t *sector)
 }
 
 /* what the core asks for where a release comes inside an installer */
-#define ASK_15TH "the 15th Anniversary Edition's Pak01.pak, with Intro2004.ogg, End2004.ogg and lang_<language>.Txt for its music and texts"
-#define ASK_RAW "the game's own files from it instead: " ASK_15TH "; the 20th's game folder, zipped"
-#define ASK_PC_CD "the 15th Anniversary Edition's CD holds the game inside an installer, which the core does not open: add " ASK_15TH
+#define ASK_RAW "error.ask_raw"
+#define ASK_PC_CD "error.ask_pc_cd"
 
 static int contains(const uint8_t *buf, size_t n, const char *what)
 {
@@ -344,8 +348,8 @@ static int contains(const uint8_t *buf, size_t n, const char *what)
 static const char *installer_kind(const uint8_t *buf, size_t n)
 {
 	if (n < 64 || buf[0] != 'M' || buf[1] != 'Z') return NULL;
-	if (contains(buf, n, "NullsoftInst")) return "an NSIS installer";
-	if (contains(buf, n, "Inno Setup Setup Data")) return "an Inno Setup installer";
+	if (contains(buf, n, "NullsoftInst")) return "error.kind.nsis";
+	if (contains(buf, n, "Inno Setup Setup Data")) return "error.kind.inno";
 	return NULL;
 }
 
@@ -432,7 +436,7 @@ static int add_zip(const char *name, long size, char *err, int errsize)
 {
 	if (g_nzips == MAX_ZIPS)
 	{
-		snprintf(err, (size_t)errsize, "too many zips in the project (%d at most)", MAX_ZIPS);
+		snprintf(err, (size_t)errsize, "error.too_many_zips_in_the_project" TEXT_ARG "%d", MAX_ZIPS);
 		return 0;
 	}
 	const int z = g_nzips;
@@ -444,7 +448,7 @@ static int add_zip(const char *name, long size, char *err, int errsize)
 	if (!g_zips[z].f || !mz_zip_reader_init(&g_zips[z].za, (mz_uint64)size, 0))
 	{
 		if (g_zips[z].f) fclose(g_zips[z].f);
-		snprintf(err, (size_t)errsize, "%s is not a zip file", name);
+		snprintf(err, (size_t)errsize, "error.is_not_a_zip_file" TEXT_ARG "%s", name);
 		return 0;
 	}
 	g_nzips++;
@@ -455,7 +459,7 @@ static int add_zip(const char *name, long size, char *err, int errsize)
 		if (!mz_zip_reader_file_stat(&g_zips[z].za, (mz_uint)i, &st) || st.m_is_directory) continue;
 		if (st.m_uncomp_size > 0xFFFFFFF0u)
 		{
-			snprintf(err, (size_t)errsize, "%s in %s is too large (%llu bytes)", st.m_filename, name, (unsigned long long)st.m_uncomp_size);
+			snprintf(err, (size_t)errsize, "error.in_is_too_large_bytes" TEXT_ARG "%s" TEXT_ARG "%s" TEXT_ARG "%llu", st.m_filename, name, (unsigned long long)st.m_uncomp_size);
 			return 0;
 		}
 		/* a disk image in the zip (TOSEC's come so): its files */
@@ -467,7 +471,7 @@ static int add_zip(const char *name, long size, char *err, int errsize)
 			{
 				if (!disk_read(img, (size_t)st.m_uncomp_size, disk_file, NULL))
 				{
-					snprintf(err, (size_t)errsize, "%s in %s is a disk image the core could not read", st.m_filename, name);
+					snprintf(err, (size_t)errsize, "error.in_is_a_disk_image_the_core" TEXT_ARG "%s" TEXT_ARG "%s", st.m_filename, name);
 					free(img);
 					return 0;
 				}
@@ -493,7 +497,7 @@ static int add_disk(const char *name, long size, char *err, int errsize)
 	if (got == (size_t)size && disk_kind(img, (size_t)size))
 	{
 		ok = disk_read(img, (size_t)size, disk_file, NULL);
-		if (!ok) snprintf(err, (size_t)errsize, "%s is a %s disk image the core could not read", name, disk_kind(img, (size_t)size));
+		if (!ok) snprintf(err, (size_t)errsize, "error.is_a_disk_image_the_core" TEXT_ARG "%s" TEXT_ARG "%s", name, disk_kind(img, (size_t)size));
 		else ok = 1;
 	}
 	free(img);
@@ -551,12 +555,12 @@ static int add_loose(const char *name, const char *place, long size, char *err, 
 {
 	if (g_nloose == MAX_LOOSE)
 	{
-		snprintf(err, (size_t)errsize, "too many loose files in the project (%d at most; zip them)", MAX_LOOSE);
+		snprintf(err, (size_t)errsize, "error.too_many_loose_files_in_the" TEXT_ARG "%d", MAX_LOOSE);
 		return 0;
 	}
 	if ((unsigned long)size > 0xFFFFFFF0u)
 	{
-		snprintf(err, (size_t)errsize, "%s is too large (%ld bytes)", name, size);
+		snprintf(err, (size_t)errsize, "error.is_too_large_bytes" TEXT_ARG "%s" TEXT_ARG "%ld", name, size);
 		return 0;
 	}
 	snprintf(g_loose[g_nloose], sizeof g_loose[0], "%.255s", name);
@@ -582,7 +586,7 @@ static int said_installer(char *err, int errsize)
 		const char *kind = installer_kind(buf, n);
 		if (kind)
 		{
-			snprintf(err, (size_t)errsize, "%s in %s is %s, which the core does not open: add %s", c->path, g_zips[c->zip].name, kind, ASK_RAW);
+			snprintf(err, (size_t)errsize, "error.in_is_which_the_core_does" TEXT_ARG "%s" TEXT_ARG "%s" TEXT_ARG "%s" TEXT_ARG "%s", c->path, g_zips[c->zip].name, kind, ASK_RAW);
 			said = 1;
 		}
 	}
@@ -613,12 +617,12 @@ static int refuse_container(const char *name, char *err, int errsize)
 	int ok = 1;
 	if (kind)
 	{
-		snprintf(err, (size_t)errsize, "%s is %s, which the core does not open: add %s", name, kind, ASK_RAW);
+		snprintf(err, (size_t)errsize, "error.not_opened" TEXT_ARG "%s" TEXT_ARG "%s" TEXT_ARG "%s", name, kind, ASK_RAW);
 		ok = 0;
 	}
 	else if (n >= 0x8000 + 8 && is_iso9660_pvd(buf + 0x8000))
 	{
-		snprintf(err, (size_t)errsize, "%s is a PC CD's image, not the 3DO's disc: %s", name, ASK_PC_CD);
+		snprintf(err, (size_t)errsize, "error.pc_cd_image" TEXT_ARG "%s" TEXT_ARG "%s", name, ASK_PC_CD);
 		ok = 0;
 	}
 	free(buf);
@@ -662,7 +666,7 @@ static int settle(char *err, int errsize)
 	if (!found)
 	{
 		if (!said_installer(err, errsize))
-			snprintf(err, (size_t)errsize, "the files hold no Another World data: none has what rawgl knows a release by - MEMLIST.BIN (DOS), BANK01 (Amiga, Atari ST), AW.TOS (the Atari ST demo), Data/Pak01.pak (the 15th Anniversary Edition), game/DAT/FILE017.DAT (the 20th), BANK (Windows 3.1), GameData/ (3DO)");
+			snprintf(err, (size_t)errsize, "error.files_hold_no_another_world");
 		return 0;
 	}
 	const size_t rootlen = strlen(root);
@@ -688,7 +692,7 @@ static int settle(char *err, int errsize)
 		}
 		if (!ok)
 		{
-			snprintf(err, (size_t)errsize, "%s could not be unpacked%s", c->path, data ? "" : " (out of memory)");
+			snprintf(err, (size_t)errsize, data ? "error.not_unpacked" TEXT_ARG "%s" : "error.not_unpacked_memory" TEXT_ARG "%s", c->path);
 			return 0;
 		}
 		struct gfile *g = &g_files[g_nfiles++];
@@ -719,9 +723,9 @@ static int open_disc(const char *name, const uint8_t *head, long size, char *err
 		{
 			uint8_t pvd[8];
 			if (chd_read_sectors(16 * 2048, pvd, sizeof pvd) == sizeof pvd && is_iso9660_pvd(pvd))
-				snprintf(err, (size_t)errsize, "%s is a PC CD, not the 3DO's disc: %s", name, ASK_PC_CD);
+				snprintf(err, (size_t)errsize, "error.is_a_pc_cd_not_the_3do_s" TEXT_ARG "%s" TEXT_ARG "%s", name, ASK_PC_CD);
 			else
-				snprintf(err, (size_t)errsize, "%s is a CD, but not a 3DO disc (its first sector is not an Opera file system's)", name);
+				snprintf(err, (size_t)errsize, "error.is_a_cd_but_not_a_3do_disc" TEXT_ARG "%s", name);
 			return 0;
 		}
 		g_has_host = 2;
@@ -747,7 +751,7 @@ int rawgl_files_load(char *err, int errsize)
 		if (!strcmp(release, k_releases[i].id)) label = k_releases[i].label;
 	if (!label)
 	{
-		snprintf(err, (size_t)errsize, "the setting release is \"%.15s\", which is none of Another World's releases", release);
+		snprintf(err, (size_t)errsize, "error.setting_release_is_which_is" TEXT_ARG "%.15s", release);
 		return 0;
 	}
 	char names[24][256];
@@ -764,7 +768,7 @@ int rawgl_files_load(char *err, int errsize)
 	}
 	if (present && missing >= 0)
 	{
-		snprintf(err, (size_t)errsize, "%s needs its file %s (firmware), which is not there", label, names[missing]);
+		snprintf(err, (size_t)errsize, "error.needs_its_file_firmware" TEXT_ARG "%s" TEXT_ARG "%s", label, names[missing]);
 		return 0;
 	}
 	if (!present)
@@ -798,7 +802,7 @@ int rawgl_files_load(char *err, int errsize)
 				const size_t at = strlen(list);
 				snprintf(list + at, sizeof list - at, "%s%s", n++ ? ", " : "", k_release_files[i].id);
 			}
-			snprintf(err, (size_t)errsize, "%s needs its files (firmware): %s%s", label, list, needed ? "" : " - none");
+			snprintf(err, (size_t)errsize, needed ? "error.needs_files" TEXT_ARG "%s" TEXT_ARG "%s" : "error.needs_files_none" TEXT_ARG "%s" TEXT_ARG "%s", label, list);
 			return 0;
 		}
 	}
@@ -812,14 +816,14 @@ int rawgl_files_load(char *err, int errsize)
 		snprintf(g_zip_name, sizeof g_zip_name, "%.255s", names[i]);
 		if (size < 0)
 		{
-			snprintf(err, (size_t)errsize, "Another World needs the game's files: %s, one of the project's, is not there", names[i]);
+			snprintf(err, (size_t)errsize, "error.another_world_needs_the_game" TEXT_ARG "%s", names[i]);
 			ok = 0;
 		}
 		else if ((size >= 16 && !memcmp(head, "MComprHD", 8)) || (size >= 128 && is_opera_image(head)))
 		{
 			if (count > 1)
 			{
-				snprintf(err, (size_t)errsize, "%s is the 3DO's disc, which comes alone: the project has %d files", names[i], count);
+				snprintf(err, (size_t)errsize, "error.is_the_3do_s_disc_which" TEXT_ARG "%s" TEXT_ARG "%d", names[i], count);
 				ok = 0;
 			}
 			else ok = open_disc(names[i], head, size, err, errsize);
@@ -849,11 +853,11 @@ int rawgl_files_load(char *err, int errsize)
 				const long n = buf ? peek(names[i], buf, INSTALLER_PEEK) : -1;
 				const char *kind = n > 0 ? installer_kind(buf, (size_t)(n < (long)INSTALLER_PEEK ? n : (long)INSTALLER_PEEK)) : NULL;
 				if (kind)
-					snprintf(err, (size_t)errsize, "%s is %s, which the core does not open: add %s", names[i], kind, ASK_RAW);
+					snprintf(err, (size_t)errsize, "error.not_opened" TEXT_ARG "%s" TEXT_ARG "%s" TEXT_ARG "%s", names[i], kind, ASK_RAW);
 				else if (n >= 0x8000 + 8 && is_iso9660_pvd(buf + 0x8000))
-					snprintf(err, (size_t)errsize, "%s is a PC CD's image, not the 3DO's disc: %s", names[i], ASK_PC_CD);
+					snprintf(err, (size_t)errsize, "error.pc_cd_image" TEXT_ARG "%s" TEXT_ARG "%s", names[i], ASK_PC_CD);
 				else
-					snprintf(err, (size_t)errsize, "%s is not a zip, a disk image the core reads (DOS or Atari ST FAT, .msa, .stx, the Amiga's .adf), a file of the 15th Anniversary Edition's (Pak01.pak, .ogg, lang_*.Txt) or the 3DO's disc (.chd, .iso)", names[i]);
+					snprintf(err, (size_t)errsize, "error.is_not_a_zip_a_disk_image" TEXT_ARG "%s", names[i]);
 				free(buf);
 			}
 			ok = 0;

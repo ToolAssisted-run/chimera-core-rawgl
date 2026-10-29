@@ -431,9 +431,9 @@ for sd in sf-none sf-bad; do
 	printf '{"release": "win31", "soundFont": true}' > "$work/$sd/settings"
 done
 echo "not a SoundFont" > "$work/sf-bad/soundfont.sf2"
-refuse empty "Another World (DOS) needs its files (firmware): dos-disk" "no files"
+refuse empty "error.needs_files[a-z_]*.Another World (DOS).dos-disk" "no files"
 echo "not a zip" > "$work/notzip/game.zip"
-refuse notzip "is not a zip, a disk image" "not a zip, a disk image or a disc"
+refuse notzip "error.is_not_a_zip_a_disk_image" "not a zip, a disk image or a disc"
 python3 - "$work" <<'PY'
 import sys, zipfile
 w = sys.argv[1]
@@ -462,23 +462,23 @@ ms = importlib.util.module_from_spec(spec); spec.loader.exec_module(ms)
 iso = bytearray(2048 * 40); iso[16 * 2048:16 * 2048 + 6] = b"\x01CD001"
 open(sys.argv[2] + "/pcchd/game.chd", "wb").write(ms.chd_of_image(bytes(iso)))
 PY
-refuse nodata "hold no Another World data" "no game in the zip"
+refuse nodata "error.files_hold_no_another_world" "no game in the zip"
 refuse unknown "No data files found" "a BANK01 of no known release (rawgl's own error, at Init)"
 refuse badpak "No data files found" "a 15th Anniversary Edition's Pak01.pak that is not one (rawgl's own error, at Init)"
-refuse nsis "is an NSIS installer, which the core does not open: add the game's own files" "an installer (NSIS), loose"
-refuse inno "is an Inno Setup installer, which the core does not open: add the game's own files" "an installer (Inno Setup) in a zip"
-refuse pciso "is a PC CD's image, not the 3DO's disc: .*add the 15th" "a PC CD's image (.iso)"
-refuse pcchd "is a PC CD, not the 3DO's disc: .*add the 15th" "a PC CD (.chd)"
+refuse nsis "error.not_opened.*error.kind.nsis.error.ask_raw" "an installer (NSIS), loose"
+refuse inno "error.in_is_which_the_core_does.*error.kind.inno.error.ask_raw" "an installer (Inno Setup) in a zip"
+refuse pciso "error.pc_cd_image.*error.ask_pc_cd" "a PC CD's image (.iso)"
+refuse pcchd "error.is_a_pc_cd_not_the_3do_s.*error.ask_pc_cd" "a PC CD (.chd)"
 cp "$work/synth/game.zip" "$work/badseed/game.zip"
 printf '{"randomSeed": 70000}' > "$work/badseed/settings"
-refuse badseed "goes from 0 to 65535" "randomSeed 70000"
-refuse mt32-none "CM32L_CONTROL.ROM is not there" "mt32 without the CM-32L's ROMs"
-refuse mt32-bad "is not a Roland ROM Munt knows" "mt32 with ROMs that are not"
-refuse sf-none "soundfont.sf2 is not there" "soundFont without the SoundFont"
-refuse sf-bad "soundfont.sf2 is not a SoundFont" "soundFont with a file that is not one"
-refuse fw-half "needs its file amiga-en-disk2 (firmware), which is not there" "the Amiga's machine with one of its two disks"
-refuse fw-bad "none of Another World's releases" "a release the core does not have"
-refuse fw-nsis "Pak01.pak is an NSIS installer, which the core does not open" "the 15th's Pak01.pak that is its installer"
+refuse badseed "error.setting_randomseed_is_it" "randomSeed 70000"
+refuse mt32-none "error.mt_32_sound_effects_need_the.CM32L_CONTROL.ROM" "mt32 without the CM-32L's ROMs"
+refuse mt32-bad "error.is_not_a_roland_rom_munt" "mt32 with ROMs that are not"
+refuse sf-none "error.no_soundfont" "soundFont without the SoundFont"
+refuse sf-bad "error.bad_soundfont" "soundFont with a file that is not one"
+refuse fw-half "error.needs_its_file_firmware.*amiga-en-disk2" "the Amiga's machine with one of its two disks"
+refuse fw-bad "error.setting_release_is_which_is" "a release the core does not have"
+refuse fw-nsis "error.not_opened.Pak01.pak.error.kind.nsis" "the 15th's Pak01.pak that is its installer"
 
 echo "== halts"
 for kind in opcode shape; do
