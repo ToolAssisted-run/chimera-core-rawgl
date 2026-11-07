@@ -11,13 +11,19 @@ include sources.mk
 B := $(ROOT)/build/native
 MBINCS := -Inative-shim -I$(MB)/source/guest/include -I$(MB)/extern/jsmn
 
-RAWGL_CXXFLAGS := $(RAWGL_CXXFLAGS_COMMON) -w
-MINIZ_CFLAGS := $(MINIZ_CFLAGS_COMMON) -w
-ZLIB_CFLAGS := $(ZLIB_CFLAGS_COMMON) -w
-MUNT_CXXFLAGS := $(MUNT_CXXFLAGS_COMMON) -w
-CHDR_CFLAGS := $(CHDR_CFLAGS_COMMON) -w
-CORE_CFLAGS := $(CORE_CFLAGS_COMMON) $(MBINCS) -I. -Wall -Wno-unused-function
-CORE_CXXFLAGS := $(CORE_CXXFLAGS_COMMON) $(MBINCS) -I. -Wall -Wno-unused-function
+# On aarch64 GCC fuses a multiply and an add into one instruction unless told
+# not to, which rounds once where the guest (built with -ffp-contract=off)
+# rounds twice. Both builds keep them apart; x86-64 is unchanged.
+ifeq ($(shell uname -m),aarch64)
+NATIVE_CPU := -ffp-contract=off
+endif
+RAWGL_CXXFLAGS := $(RAWGL_CXXFLAGS_COMMON) -w $(NATIVE_CPU)
+MINIZ_CFLAGS := $(MINIZ_CFLAGS_COMMON) -w $(NATIVE_CPU)
+ZLIB_CFLAGS := $(ZLIB_CFLAGS_COMMON) -w $(NATIVE_CPU)
+MUNT_CXXFLAGS := $(MUNT_CXXFLAGS_COMMON) -w $(NATIVE_CPU)
+CHDR_CFLAGS := $(CHDR_CFLAGS_COMMON) -w $(NATIVE_CPU)
+CORE_CFLAGS := $(CORE_CFLAGS_COMMON) $(MBINCS) -I. -Wall -Wno-unused-function $(NATIVE_CPU)
+CORE_CXXFLAGS := $(CORE_CXXFLAGS_COMMON) $(MBINCS) -I. -Wall -Wno-unused-function $(NATIVE_CPU)
 
 $(call flags_stamp,$(B),$(RAWGL_CXXFLAGS) | $(MINIZ_CFLAGS) | $(ZLIB_CFLAGS) | $(MUNT_CXXFLAGS) | $(CHDR_CFLAGS) | $(CORE_CFLAGS) | $(CORE_CXXFLAGS))
 
