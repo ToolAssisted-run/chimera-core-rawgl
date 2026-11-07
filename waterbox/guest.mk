@@ -24,10 +24,19 @@ CXX    := g++ -specs $(SR)/lib/musl-gcc.specs
 
 # BizHawk waterbox's frozen guest flags, as miniBox's source/guest/meson.build
 # gives them to a guest
-WBFLAGS := -fvisibility=hidden -mcmodel=large -mno-red-zone -mstack-protector-guard=global \
-	-fno-stack-protector -fno-pic -fno-pie -fcf-protection=none -DNDEBUG -DCHIMERA_GUEST
+# The guest is built for the CPU this runs on (a package is built natively,
+# never cross-built), with miniBox's own flags for that CPU (its meson.build,
+# waterbox_cpu_flags); x86_64 keeps the flags it always had.
+ARCH := $(shell uname -m)
+ifeq ($(ARCH),aarch64)
+CPUFLAGS := -mbranch-protection=none -mno-outline-atomics -ffp-contract=off -fsigned-char -ffixed-x18
+else
+CPUFLAGS := -mcmodel=large -mno-red-zone -fcf-protection=none
+endif
+WBFLAGS := -fvisibility=hidden $(CPUFLAGS) -mstack-protector-guard=global \
+	-fno-stack-protector -fno-pic -fno-pie -DNDEBUG -DCHIMERA_GUEST
 MBINCS := -I$(MB)/extern/emulibc -I$(MB)/source/guest/include -I$(MB)/extern/jsmn
-CXXINCS := -I$(SR)/include/c++/$(GCCVER) -I$(SR)/include/c++/$(GCCVER)/x86_64-linux-musl
+CXXINCS := -I$(SR)/include/c++/$(GCCVER) -I$(SR)/include/c++/$(GCCVER)/$(ARCH)-linux-musl
 
 RAWGL_CXXFLAGS := $(WBFLAGS) $(RAWGL_CXXFLAGS_COMMON) $(CXXINCS) -w
 MINIZ_CFLAGS := $(WBFLAGS) $(MINIZ_CFLAGS_COMMON) -w
@@ -89,6 +98,9 @@ $(B)/core.wbx: $(CORE_OBJS) $(RAWGL_OBJS) $(MINIZ_OBJS) $(ZLIB_OBJS) $(MUNT_OBJS
 		-Wl,-u,pthread_once -Wl,-u,pthread_cond_wait -Wl,-u,pthread_cond_broadcast -Wl,-u,pthread_key_create \
 		-o $@.tmp $^ $(MBUILD)/source/guest/cxxglue.c.o $(MBUILD)/source/guest/emulibc.c.o $(WRAP_FLAGS) \
 		-L$(SR)/lib -lstdc++ -lm -lgcc -lgcc_eh -lc
+	# an aarch64 guest reads its thread pointer from the machine's slot
+	# (miniBox's MACHINE-SPEC, "aarch64"): the host refuses one not rewritten so
+	if [ $(ARCH) = aarch64 ]; then python3 $(MB)/source/guest/wbx-tp-rewrite.py $@.tmp; fi
 	sh $(MB)/source/guest/check-wbx.sh $@.tmp
 	mv $@.tmp $@
 
